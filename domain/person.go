@@ -55,10 +55,10 @@ type FamilyTreeMember struct {
 	Gender     GenderType
 	Generation int
 
-	ChildrenToVisit []FamilyTreeMember
+	ChildrenToVisit []*FamilyTreeMember
 	ChildrenIDS     []string
 
-	ParentToVisit []FamilyTreeMember
+	ParentToVisit []*FamilyTreeMember
 	ParentIDS     []string
 }
 

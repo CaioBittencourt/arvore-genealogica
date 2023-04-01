@@ -81,7 +81,8 @@ func buildFamilyMembersFromPersonRelatives(
 
 		if !visitedPersonsMap[parentID] {
 			visitedPersonsMap[parentID] = true
-			familyMember.ParentToVisit = append(familyMember.ParentToVisit, buildFamilyMembersFromPersonRelatives(personRelativesMap[parentID], visitedPersonsMap, personRelativesMap, generation+1))
+			parent := buildFamilyMembersFromPersonRelatives(personRelativesMap[parentID], visitedPersonsMap, personRelativesMap, generation+1)
+			familyMember.ParentToVisit = append(familyMember.ParentToVisit, &parent)
 		}
 	}
 
@@ -94,14 +95,16 @@ func buildFamilyMembersFromPersonRelatives(
 
 		if !visitedPersonsMap[childrenID] {
 			visitedPersonsMap[childrenID] = true
-			familyMember.ParentToVisit = append(familyMember.ParentToVisit, buildFamilyMembersFromPersonRelatives(personRelativesMap[childrenID], visitedPersonsMap, personRelativesMap, generation-1))
+			children := buildFamilyMembersFromPersonRelatives(personRelativesMap[childrenID], visitedPersonsMap, personRelativesMap, generation-1)
+			familyMember.ParentToVisit = append(familyMember.ParentToVisit, &children)
 		}
 	}
 
 	return familyMember
 }
 
-func buildPersonFromPersonWithRelatives(ctx context.Context, personWithRelatives PersonWithRelatives) domain.FamilyTree {
+// adicionei um family member
+func buildTreeFromPersonWithRelatives(ctx context.Context, personWithRelatives PersonWithRelatives) domain.FamilyTree {
 	personRelativesMap := make(map[string]Person, len(personWithRelatives.Relatives)+1)
 
 	rootPersonID := personWithRelatives.ID.Hex()
@@ -113,11 +116,9 @@ func buildPersonFromPersonWithRelatives(ctx context.Context, personWithRelatives
 		Children: personWithRelatives.Children,
 	}
 	for _, relatedPerson := range personWithRelatives.Relatives {
-		// person := buildDomainPersonFromRepositoryPerson(relatedPerson)
 		personRelativesMap[relatedPerson.ID.Hex()] = relatedPerson
 	}
 
-	fmt.Println(personRelativesMap)
 	visitedPersonsMap := map[string]bool{rootPersonID: true}
 	familyTree := domain.FamilyTree{
 		Root: buildFamilyMembersFromPersonRelatives(personRelativesMap[rootPersonID], visitedPersonsMap, personRelativesMap, 0),
@@ -126,7 +127,7 @@ func buildPersonFromPersonWithRelatives(ctx context.Context, personWithRelatives
 	return familyTree
 }
 
-func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID string, maxDepth *int64) (*domain.FamilyTree, error) {
+func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, personID string, connectFromField string, maxDepth *int) (*PersonWithRelatives, error) {
 	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
 
 	personObjectId, err := primitive.ObjectIDFromHex(personID)
@@ -137,8 +138,8 @@ func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID
 	matchStage := bson.D{{"$match", bson.D{{"_id", personObjectId}}}}
 	graphLookupParameters := bson.D{
 		{"from", personCollectionName},
-		{"startWith", "$parents"},
-		{"connectFromField", "parents"},
+		{"startWith", fmt.Sprintf("$%s", connectFromField)},
+		{"connectFromField", connectFromField},
 		{"connectToField", "_id"},
 		{"as", relativesFieldName},
 		{"depthField", depthFieldName},
@@ -172,7 +173,51 @@ func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID
 		return nil, err
 	}
 
-	familyTree := buildPersonFromPersonWithRelatives(ctx, personRelatives)
+	return &personRelatives, nil
+}
+
+func mergeRelativesIntoSet(relativesLists [][]Person) []Person {
+	relativesSet := make(map[string]Person)
+	for _, relativesList := range relativesLists {
+		for _, relativePerson := range relativesList {
+			_, ok := relativesSet[relativePerson.ID.Hex()]
+			if !ok {
+				relativesSet[relativePerson.ID.Hex()] = relativePerson
+			}
+		}
+	}
+
+	relatives := make([]Person, len(relativesSet))
+	for _, person := range relativesSet {
+		relatives = append(relatives, person)
+	}
+
+	return relatives
+}
+
+func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID string, maxDepth *int64) (*domain.FamilyTree, error) {
+	personWithAscendants, err := pr.graphlookupGetPersonRelatives(ctx, personID, "parents", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	//NOTE: find brothers, cousins and etc. If we wanted to find more relations we could go higher on the ascendant. but since the challenge goes only to that level...
+	relativesLists := make([][]Person, len(personWithAscendants.Parents))
+	relativesLists = append(relativesLists, personWithAscendants.Relatives)
+	for _, parent := range personWithAscendants.Parents {
+		maxDepth := 1 // get brothers and cousins, this could be configurable
+		parentRelatives, err := pr.graphlookupGetPersonRelatives(ctx, parent.Hex(), "children", &maxDepth)
+		if err != nil {
+			return nil, err
+		}
+
+		relativesLists = append(relativesLists, parentRelatives.Relatives)
+	}
+
+	personWithRelatives := personWithAscendants
+	personWithRelatives.Relatives = mergeRelativesIntoSet(relativesLists)
+
+	familyTree := buildTreeFromPersonWithRelatives(ctx, *personWithRelatives)
 	return &familyTree, nil
 }
 

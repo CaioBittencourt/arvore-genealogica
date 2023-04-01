@@ -34,7 +34,8 @@ func GetPersonFamilyTreeHandler(personController controller.PersonController) gi
 
 		person, err := personController.GetFamilyTreeByPersonID(ctx, personID)
 		if err != nil {
-			ctx.JSON(500, nil) // fazer error handling / error matching da camada de dominio com a do http
+			fmt.Println("errorrrr", err)
+			// 	ctx.JSON(500, nil) // fazer error handling / error matching da camada de dominio com a do http
 		}
 
 		ctx.JSON(200, person)

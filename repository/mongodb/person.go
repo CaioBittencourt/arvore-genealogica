@@ -12,69 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// Fazendo duas buscas por pai e depois por filho eu não conseguiria achar Spouse ainda sim.
-
-// Pegar irmãos com query mesmo pai
-// Pegar sobrinhos com Query filho da minha irmã
-// filhos
-// Pegar Spouse com query
-// O double mapping tem que rolar. COm a query de child eu consigo andar no grapho para baixo. E isso já resolve muita coisa, é só escolher o lugar certo para começar a descer.
-
-// usar NewObjectID para criar um novo ID?
-
-// Começar pelo meu pai / mãe e ir descendo (graphlookup) neles para identificar sobrinhos e irmãos. O dept, vai me dizer o que cada um é.
-
-// Para pegar o Spouse podemos pegar todas as suas crianças e sobrinhos e fazer um graphlookup com eles juntos
-//
-// transversando um grapho eu consigo achar:
-// Pais, Irmãos,
-// {
-//     "_id": ObjectId("642506fd04ac527b404e6bd1")
-// }
-// {
-//     from: "person",
-// //    startWith: {$eq: ["_id", ObjectId("642506fd04ac527b404e6bd1")]}, // connectToField value(s) that recursive search starts with
-// //    startWith: {"id": "642506fd04ac527b404e6bd1"},
-//     startWith: "$parents",
-//     connectFromField: "parents",
-//     connectToField: "id",
-//     as: "hierarquia",
-// //    maxDepth: 10, // optional
-//     depthField: "depthField" // optional - name of field in output documents
-//     //restrictSearchWithMatch: <document> // optional - specifying additional conditions for the recursive search
-// }
-//	{
-//		"_id" : 1,
-//		"name" : "Dev",
-//		"reportingHierarchy" : [ ]
-//	 }
-//	 {
-//		"_id" : 2,
-//		"name" : "Eliot",
-//		"reportsTo" : "Dev",
-//		"reportingHierarchy" : [
-//		   { "_id" : 1, "name" : "Dev" }
-//		]
-//	 }
-//	 {
-//		"_id" : 3,
-//		"name" : "Ron",
-//		"reportsTo" : "Eliot",
-//		"reportingHierarchy" : [
-//		   { "_id" : 1, "name" : "Dev" },
-//		   { "_id" : 2, "name" : "Eliot", "reportsTo" : "Dev" }
-//		]
-//	 }
-//	 {
-//		"_id" : 4,
-//		"name" : "Andrew",
-//		"reportsTo" : "Eliot",
-//		"reportingHierarchy" : [
-//		   { "_id" : 1, "name" : "Dev" },
-//		   { "_id" : 2, "name" : "Eliot", "reportsTo" : "Dev" }
-//		]
-//	 }
-
 const (
 	databaseName = "familyTree"
 
@@ -83,11 +20,6 @@ const (
 
 	personCollectionName = "person"
 )
-
-// type Relative struct {
-// 	Person
-// 	DepthField int64 `bson:"depthField,omitempty"`
-// }
 
 type PersonWithRelatives struct {
 	Person    `bson:"inline"`
@@ -128,49 +60,73 @@ func buildDomainPersonFromRepositoryPerson(personRepository Person) domain.Perso
 	return person
 }
 
-func buildPersonFromPersonWithRelatives(ctx context.Context, personWithRelatives PersonWithRelatives) (domain.Person, error) {
-	personRelativesMap := make(map[string]*domain.Person, len(personWithRelatives.Relatives)+1)
-	person := domain.Person{
-		ID:     personWithRelatives.ID.Hex(),
-		Name:   personWithRelatives.Name,
-		Gender: domain.GenderType(personWithRelatives.Gender),
+func buildFamilyMembersFromPersonRelatives(
+	personRepository Person,
+	visitedPersonsMap map[string]bool,
+	personRelativesMap map[string]Person,
+	generation int) domain.FamilyTreeMember {
+	familyMember := domain.FamilyTreeMember{
+		ID:         personRepository.ID.Hex(),
+		Name:       personRepository.Name,
+		Gender:     domain.GenderType(personRepository.Gender),
+		Generation: generation,
 	}
 
-	for _, parent := range personWithRelatives.Parents {
-		person.Parents = append(person.Parents, domain.Person{ID: parent.Hex()})
-	}
-
-	for _, children := range personWithRelatives.Children {
-		person.Children = append(person.Children, domain.Person{ID: children.Hex()})
-	}
-
-	personRelativesMap[person.ID] = &person
-	for _, relatedPerson := range personWithRelatives.Relatives {
-		person := buildDomainPersonFromRepositoryPerson(relatedPerson)
-		personRelativesMap[person.ID] = &person
-	}
-
-	for _, currentPerson := range personRelativesMap {
-		for i, emptyParent := range currentPerson.Parents {
-			parent := personRelativesMap[emptyParent.ID]
-			if parent != nil {
-				currentPerson.Parents[i] = *parent
-			}
+	for _, parentObjectID := range personRepository.Parents {
+		parentID := parentObjectID.Hex()
+		familyMember.ParentIDS = append(familyMember.ParentIDS, parentID)
+		if _, ok := personRelativesMap[parentID]; !ok {
+			continue
 		}
 
-		for i, emptyChildren := range currentPerson.Children {
-			children := personRelativesMap[emptyChildren.ID]
-			if children != nil {
-				currentPerson.Children[i] = *children
-			}
+		if !visitedPersonsMap[parentID] {
+			visitedPersonsMap[parentID] = true
+			familyMember.ParentToVisit = append(familyMember.ParentToVisit, buildFamilyMembersFromPersonRelatives(personRelativesMap[parentID], visitedPersonsMap, personRelativesMap, generation+1))
 		}
 	}
 
-	return person, nil
+	for _, childrenObjectID := range personRepository.Children {
+		childrenID := childrenObjectID.Hex()
+		familyMember.ChildrenIDS = append(familyMember.ChildrenIDS, childrenID)
+		if _, ok := personRelativesMap[childrenID]; !ok {
+			continue
+		}
 
+		if !visitedPersonsMap[childrenID] {
+			visitedPersonsMap[childrenID] = true
+			familyMember.ParentToVisit = append(familyMember.ParentToVisit, buildFamilyMembersFromPersonRelatives(personRelativesMap[childrenID], visitedPersonsMap, personRelativesMap, generation-1))
+		}
+	}
+
+	return familyMember
 }
 
-func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID string, maxDepth *int64) (*domain.Person, error) {
+func buildPersonFromPersonWithRelatives(ctx context.Context, personWithRelatives PersonWithRelatives) domain.FamilyTree {
+	personRelativesMap := make(map[string]Person, len(personWithRelatives.Relatives)+1)
+
+	rootPersonID := personWithRelatives.ID.Hex()
+	personRelativesMap[rootPersonID] = Person{
+		ID:       personWithRelatives.ID,
+		Name:     personWithRelatives.Name,
+		Gender:   personWithRelatives.Gender,
+		Parents:  personWithRelatives.Parents,
+		Children: personWithRelatives.Children,
+	}
+	for _, relatedPerson := range personWithRelatives.Relatives {
+		// person := buildDomainPersonFromRepositoryPerson(relatedPerson)
+		personRelativesMap[relatedPerson.ID.Hex()] = relatedPerson
+	}
+
+	fmt.Println(personRelativesMap)
+	visitedPersonsMap := map[string]bool{rootPersonID: true}
+	familyTree := domain.FamilyTree{
+		Root: buildFamilyMembersFromPersonRelatives(personRelativesMap[rootPersonID], visitedPersonsMap, personRelativesMap, 0),
+	}
+
+	return familyTree
+}
+
+func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID string, maxDepth *int64) (*domain.FamilyTree, error) {
 	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
 
 	personObjectId, err := primitive.ObjectIDFromHex(personID)
@@ -216,28 +172,13 @@ func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID
 		return nil, err
 	}
 
-	fmt.Printf("%+v\n", personRelatives.Name)
-	personAscendants, err := buildPersonFromPersonWithRelatives(ctx, personRelatives)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-	fmt.Printf("%+v\n", personAscendants) // TODO: REMOVE THIS
-
-	return &personAscendants, nil
+	familyTree := buildPersonFromPersonWithRelatives(ctx, personRelatives)
+	return &familyTree, nil
 }
 
 func (pr PersonRepository) GetDescendantsByPersonID(ctx context.Context, personID string, maxDepth *int64) ([]domain.Person, error) {
 	return nil, nil
 }
-
-// func (pr PersonRepository) GetFamilyTreeByPersonID(ctx context.Context, personID string) (*domain.Person, error) {
-// 	// pegar todos os ascendentes, não precisa de TODOS os relationships
-// 	// AS RELAÇÕES SÃO SÓ PARA A PESSOA PROCURADA, POR EXEMPLO QND PEGAMOS JAQUELINE QUE É UMA IRMÃ, NÃO PEGAMOS ERIC QUE É O PAI DELA. Não precisamos de todas as relações de todos os nós.
-// 	// Nao ter informação redundante ou seja, Pheobe é filha de marcos e Marcos é pai de Phoebe
-// 	return nil, nil
-// }
 
 func (pr PersonRepository) addChildrenToParents(ctx context.Context, parentIDS []primitive.ObjectID, childrenID primitive.ObjectID) error {
 	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)

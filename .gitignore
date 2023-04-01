@@ -1,0 +1,10 @@
+*.test
+
+/.idea/
+*.env
+/vendor/
+.gitsecret/keys/random_seed
+!*.secret
+scts-tickets-api.yaml
+__debug_bin
+*.pprof

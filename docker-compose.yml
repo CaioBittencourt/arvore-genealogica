@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: 'mongo:6'
+    restart: on-failure
+    hostname: mongo
+    environment:
+      - MONGO_REPLICA_SET_NAME=rs0
+    ports:
+      - '27017:27017'
+    volumes:
+      - 'mongo:/data/db'
+      - ./keyfile:/opt/keyfile/keyfile
+    healthcheck:
+      test: |
+        test $$(mongosh --quiet --eval "try { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok } catch (_) { rs.status().ok }") -eq 1
+      interval: 10s
+      start_period: 30s
+    command: "--bind_ip_all --replSet rs0"
+
+  server:
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # target: release
+      target: development
+    volumes:
+      - './:/go/src/github.com/CaioBittencourt/arvore-genealogica'
+volumes:
+  mongo:

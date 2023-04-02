@@ -27,12 +27,14 @@ type PersonWithRelatives struct {
 }
 
 type Person struct {
-	ID         primitive.ObjectID   `bson:"_id,omitempty"`
-	Name       string               `bson:"name,omitempty"`
-	Gender     string               `bson:"gender,omitempty"`
-	Parents    []primitive.ObjectID `bson:"parents,omitempty"`
-	Children   []primitive.ObjectID `bson:"children,omitempty"`
-	DepthField uint                 `bson:"depthField,omitempty"`
+	ID          primitive.ObjectID   `bson:"_id,omitempty"`
+	Name        string               `bson:"name,omitempty"`
+	Gender      string               `bson:"gender,omitempty"`
+	ParentIDS   []primitive.ObjectID `bson:"parentIds,omitempty"`
+	ChildrenIDS []primitive.ObjectID `bson:"childrenIds,omitempty"`
+	Parents     []Person             `bson:"parents,omitempty"`
+	Children    []Person             `bson:"children,omitempty"`
+	DepthField  uint                 `bson:"depthField,omitempty"`
 }
 
 type PersonRepository struct {
@@ -50,15 +52,38 @@ func buildDomainPersonFromRepositoryPerson(personRepository Person) domain.Perso
 		Gender: domain.GenderType(personRepository.Gender),
 	}
 
-	for _, parent := range personRepository.Parents {
-		person.Parents = append(person.Parents, &domain.Person{ID: parent.Hex()})
+	if len(personRepository.Parents) > 0 {
+		for _, parent := range personRepository.Parents {
+			domainParent := buildDomainPersonFromRepositoryPerson(parent)
+			person.Parents = append(person.Parents, &domainParent)
+		}
+	} else {
+		for _, parentID := range personRepository.ParentIDS {
+			person.Parents = append(person.Parents, &domain.Person{ID: parentID.Hex()})
+		}
 	}
 
-	for _, children := range personRepository.Children {
-		person.Children = append(person.Children, &domain.Person{ID: children.Hex()})
+	if len(personRepository.Children) > 0 {
+		for _, currentChildren := range personRepository.Children {
+			domainChildren := buildDomainPersonFromRepositoryPerson(currentChildren)
+			person.Children = append(person.Children, &domainChildren)
+		}
+	} else {
+		for _, childrenID := range personRepository.ChildrenIDS {
+			person.Children = append(person.Children, &domain.Person{ID: childrenID.Hex()})
+		}
 	}
 
 	return person
+}
+
+func buildDomainPersonsFromRepositoryPersons(personsRepository []Person) []domain.Person {
+	var domainPersons []domain.Person
+	for _, personRepository := range personsRepository {
+		domainPersons = append(domainPersons, buildDomainPersonFromRepositoryPerson(personRepository))
+	}
+
+	return domainPersons
 }
 
 func buildFamilyGraphFromPersonRelatives(personWithRelatives PersonWithRelatives) domain.FamilyGraph {
@@ -66,11 +91,11 @@ func buildFamilyGraphFromPersonRelatives(personWithRelatives PersonWithRelatives
 
 	searchedPersonID := personWithRelatives.ID.Hex()
 	personRelativesMap[searchedPersonID] = Person{
-		ID:       personWithRelatives.ID,
-		Name:     personWithRelatives.Name,
-		Gender:   personWithRelatives.Gender,
-		Parents:  personWithRelatives.Parents,
-		Children: personWithRelatives.Children,
+		ID:          personWithRelatives.ID,
+		Name:        personWithRelatives.Name,
+		Gender:      personWithRelatives.Gender,
+		ParentIDS:   personWithRelatives.ParentIDS,
+		ChildrenIDS: personWithRelatives.ChildrenIDS,
 	}
 	for _, relatedPerson := range personWithRelatives.Relatives {
 		personRelativesMap[relatedPerson.ID.Hex()] = relatedPerson
@@ -101,7 +126,7 @@ func buildFamilyRelationshipsFromPersonRelatives(
 
 	graphMembersMapped[person.ID] = &person
 
-	for _, parentObjectID := range personRepository.Parents {
+	for _, parentObjectID := range personRepository.ParentIDS {
 		parentID := parentObjectID.Hex()
 		if _, ok := personRelativesMap[parentID]; !ok {
 			continue
@@ -111,7 +136,7 @@ func buildFamilyRelationshipsFromPersonRelatives(
 		person.Parents = append(person.Parents, parent)
 	}
 
-	for _, childrenObjectID := range personRepository.Children {
+	for _, childrenObjectID := range personRepository.ChildrenIDS {
 		childrenID := childrenObjectID.Hex()
 		if _, ok := personRelativesMap[childrenID]; !ok {
 			continue
@@ -132,11 +157,11 @@ func buildFamilyGraphFromPersonWithRelatives(ctx context.Context, personWithRela
 		Gender: domain.GenderType(personWithRelatives.Gender),
 	}
 
-	for _, parent := range personWithRelatives.Parents {
+	for _, parent := range personWithRelatives.ParentIDS {
 		person.Parents = append(person.Parents, &domain.Person{ID: parent.Hex()})
 	}
 
-	for _, children := range personWithRelatives.Children {
+	for _, children := range personWithRelatives.ChildrenIDS {
 		person.Children = append(person.Children, &domain.Person{ID: children.Hex()})
 	}
 
@@ -165,10 +190,7 @@ func buildFamilyGraphFromPersonWithRelatives(ctx context.Context, personWithRela
 	return person, nil
 
 }
-
-func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, personIDS []string, connectFromField string, maxDepth *int) ([]PersonWithRelatives, error) {
-	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
-
+func convertIDStringToObjectsIDS(personIDS []string) ([]primitive.ObjectID, error) {
 	var objectIDS []primitive.ObjectID
 	for _, personID := range personIDS {
 		personObjectId, err := primitive.ObjectIDFromHex(personID)
@@ -176,6 +198,17 @@ func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, pe
 			return nil, err
 		}
 		objectIDS = append(objectIDS, personObjectId)
+	}
+
+	return objectIDS, nil
+}
+
+func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, personIDS []string, connectFromField string, maxDepth *int) ([]PersonWithRelatives, error) {
+	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
+
+	objectIDS, err := convertIDStringToObjectsIDS(personIDS)
+	if err != nil {
+		return nil, err
 	}
 
 	matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{"$in", objectIDS}}}}}}
@@ -233,8 +266,8 @@ func mergeRelativesIntoSet(relativesLists [][]Person) []Person {
 	return relatives
 }
 
-func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID string, maxDepth *int64) (*domain.FamilyGraph, error) {
-	result, err := pr.graphlookupGetPersonRelatives(ctx, []string{personID}, "parents", nil)
+func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personID string, maxDepth *int64) (*domain.FamilyGraph, error) {
+	result, err := pr.graphlookupGetPersonRelatives(ctx, []string{personID}, "parentIds", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +278,7 @@ func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID
 
 	personWithAscendants := result[0]
 
-	relativesLists := make([][]Person, len(personWithAscendants.Parents))
+	var relativesLists [][]Person
 	relativesLists = append(relativesLists, personWithAscendants.Relatives)
 
 	//NOTE: find brothers, cousins and etc. If we wanted to find more relations we could go higher on the ascendant. but since the challenge goes only to that level...
@@ -256,22 +289,24 @@ func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID
 		}
 	}
 
-	depth := 1 // get brothers and cousins, this could be configurable
-	parentAndGrandParentsWithRelatives, err := pr.graphlookupGetPersonRelatives(ctx, parentsAndGrandParentsIDS, "children", &depth)
-	if err != nil {
-		return nil, err
-	}
+	if len(parentsAndGrandParentsIDS) > 0 {
+		depth := 1 // get brothers and cousins, this could be configurable
+		parentAndGrandParentsWithRelatives, err := pr.graphlookupGetPersonRelatives(ctx, parentsAndGrandParentsIDS, "childrenIds", &depth)
+		if err != nil {
+			return nil, err
+		}
 
-	for _, parentAndGrandparent := range parentAndGrandParentsWithRelatives {
-		relativesLists = append(relativesLists, parentAndGrandparent.Relatives)
+		for _, parentAndGrandparent := range parentAndGrandParentsWithRelatives {
+			relativesLists = append(relativesLists, parentAndGrandparent.Relatives)
+		}
 	}
 
 	personWithRelatives := personWithAscendants
 	personWithRelatives.Relatives = mergeRelativesIntoSet(relativesLists)
 
-	familyTree := buildFamilyGraphFromPersonRelatives(personWithRelatives)
+	familyGraph := buildFamilyGraphFromPersonRelatives(personWithRelatives)
 
-	return &familyTree, nil
+	return &familyGraph, nil
 }
 
 func (pr PersonRepository) GetDescendantsByPersonID(ctx context.Context, personID string, maxDepth *int64) ([]domain.Person, error) {
@@ -283,7 +318,7 @@ func (pr PersonRepository) addChildrenToParents(ctx context.Context, parentIDS [
 
 	if _, err := personCollection.UpdateMany(ctx,
 		bson.D{{"_id", bson.D{{"$in", parentIDS}}}},
-		bson.D{{"$addToSet", bson.D{{"children", childrenID}}}},
+		bson.D{{"$addToSet", bson.D{{"childrenIds", childrenID}}}},
 	); err != nil {
 		return err
 	}
@@ -316,8 +351,8 @@ func (pr PersonRepository) storePerson(ctx context.Context, person domain.Person
 	insertedPerson, err := personCollection.InsertOne(ctx, bson.D{
 		{"name", person.Name},
 		{"gender", person.Gender},
-		{"parents", parents},
-		{"children", childrenIDs},
+		{"parentIds", parents},
+		{"childrenIds", childrenIDs},
 	})
 	if err != nil {
 		return nil, err
@@ -329,6 +364,52 @@ func (pr PersonRepository) storePerson(ctx context.Context, person domain.Person
 	}
 
 	return &insertedPersonObjectID, nil
+}
+func (pr PersonRepository) GetPersonWithImmediateRelativesByIDS(ctx context.Context, personIDS []string) ([]domain.Person, error) {
+	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
+
+	objectIDS, err := convertIDStringToObjectsIDS(personIDS)
+	if err != nil {
+		return nil, err
+	}
+
+	matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{"$in", objectIDS}}}}}}
+
+	lookupParentsStage := bson.D{{"$lookup", bson.D{
+		{"from", personCollectionName},
+		{"localField", "parentIds"},
+		{"foreignField", "_id"},
+		{"as", "parents"},
+	}}}
+
+	lookupChildrenStage := bson.D{{"$lookup", bson.D{
+		{"from", personCollectionName},
+		{"localField", "childrenIds"},
+		{"foreignField", "_id"},
+		{"as", "children"},
+	}}}
+	pipelineStages := bson.A{
+		matchStage,
+		lookupParentsStage,
+		lookupChildrenStage,
+	}
+
+	cursor, err := personCollection.Aggregate(ctx, pipelineStages)
+	if err != nil {
+		return nil, err
+	}
+
+	var persons []Person
+	if err := cursor.All(ctx, &persons); err != nil {
+		if err := cursor.Err(); err != nil {
+			log.WithError(err).Warn("cursor: failed to fetch person with immediate relatives by person id")
+			return nil, err
+		}
+	}
+
+	domainPersonsWithRelatives := buildDomainPersonsFromRepositoryPersons(persons)
+
+	return domainPersonsWithRelatives, nil
 }
 
 func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
@@ -348,7 +429,9 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*do
 			parentsIDS = append(parentsIDS, parentObjectID)
 		}
 
-		pr.addChildrenToParents(sessCtx, parentsIDS, *insertedPersonObjectID)
+		if err := pr.addChildrenToParents(sessCtx, parentsIDS, *insertedPersonObjectID); err != nil {
+			return nil, err
+		}
 
 		return insertedPersonObjectID, nil
 	}
@@ -358,20 +441,24 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*do
 		return nil, err
 	}
 	defer session.EndSession(ctx)
-	insertedPersonObjectID, err := session.WithTransaction(ctx, callback)
+	insertedID, err := session.WithTransaction(ctx, callback)
 	if err != nil {
 		return nil, err
 	}
 
-	insertedPerson := Person{}
-	err = pr.client.
-		Database(databaseName).
-		Collection(personCollectionName).
-		FindOne(ctx, bson.D{{"_id", insertedPersonObjectID}}).Decode(&insertedPerson)
+	insertedPersonObjectID, ok := insertedID.(*primitive.ObjectID)
+	if !ok {
+		return nil, errors.New("failed to convert inserted document to Object ID")
+	}
+
+	persons, err := pr.GetPersonWithImmediateRelativesByIDS(ctx, []string{insertedPersonObjectID.Hex()})
 	if err != nil {
 		return nil, err
 	}
-	// decidir retorno da api de STORE
 
-	return nil, nil
+	if len(persons) == 0 {
+		return nil, errors.New("unable to find inserted person")
+	}
+
+	return &persons[0], nil
 }

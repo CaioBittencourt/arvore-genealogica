@@ -43,11 +43,6 @@ type Relationship struct {
 	Person       RelationshipPerson
 	Relationship RelationshipType
 }
-
-type FamilyTree struct {
-	Root Person
-}
-
 type FamilyGraph struct {
 	Members map[string]*Person
 }

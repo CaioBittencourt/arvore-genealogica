@@ -7,7 +7,7 @@ import (
 )
 
 func RegisterPersonRoutes(router *gin.Engine, personController controller.PersonController) {
-	router.GET("/person/:id/tree", server.GetPersonFamilyTreeHandler(personController))
-	// router.GET("/person/:id/relationship", server.GetPersonFamilyTreeHandler(personController))
+	router.GET("/person/:id/tree", server.GetPersonFamilyGraphHandler(personController))
+	// router.GET("/person/:id/relationship", server.GetPersonFamilyGraphHandler(personController))
 	router.POST("/person", server.Store(personController))
 }

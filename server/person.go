@@ -46,43 +46,47 @@ type PersonTreeResponse struct {
 	Members []PersonWithRelationship
 }
 
-func GetPersonFamilyTreeHandler(personController controller.PersonController) gin.HandlerFunc {
+func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph) []PersonWithRelationship {
+	var personsWithRelationship []PersonWithRelationship
+	for _, member := range familyGraph.Members {
+		personWithRelationship := PersonWithRelationship{
+			RelationshipPerson: RelationshipPerson{
+				Name:   member.Name,
+				ID:     member.ID,
+				Gender: string(member.Gender),
+			},
+		}
+
+		for _, relationship := range member.Relationships {
+			personWithRelationship.Relationships = append(
+				personWithRelationship.Relationships,
+				Relationship{
+					Relationship: string(relationship.Relationship),
+					Person: RelationshipPerson{
+						Name:   relationship.Person.Name,
+						ID:     relationship.Person.ID,
+						Gender: string(relationship.Person.Gender),
+					},
+				})
+		}
+
+		personsWithRelationship = append(personsWithRelationship, personWithRelationship)
+	}
+
+	return personsWithRelationship
+}
+
+func GetPersonFamilyGraphHandler(personController controller.PersonController) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personID := ctx.Param("id")
 
-		familyTree, err := personController.GetFamilyTreeByPersonID(ctx, personID)
+		familyGraph, err := personController.GetFamilyGraphByPersonID(ctx, personID)
 		if err != nil {
 			ctx.JSON(500, err) // fazer error handling / error matching da camada de dominio com a do http
 			return
 		}
 
-		var resMembers []PersonWithRelationship
-		for _, member := range familyTree.Members {
-			personWithRelationship := PersonWithRelationship{
-				RelationshipPerson: RelationshipPerson{
-					Name:   member.Name,
-					ID:     member.ID,
-					Gender: string(member.Gender),
-				},
-			}
-
-			for _, relationship := range member.Relationships {
-				personWithRelationship.Relationships = append(
-					personWithRelationship.Relationships,
-					Relationship{
-						Relationship: string(relationship.Relationship),
-						Person: RelationshipPerson{
-							Name:   relationship.Person.Name,
-							ID:     relationship.Person.ID,
-							Gender: string(relationship.Person.Gender),
-						},
-					})
-			}
-
-			resMembers = append(resMembers, personWithRelationship)
-		}
-
-		ctx.JSON(200, PersonTreeResponse{Members: resMembers})
+		ctx.JSON(200, PersonTreeResponse{Members: buildPersonsWithRelationshipFromFamilyGraph(*familyGraph)})
 	})
 }
 func (pr StorePersonRequest) validate() error {
@@ -125,6 +129,36 @@ func buildPersonFromStorePersonRequest(personReq StorePersonRequest) domain.Pers
 
 }
 
+func buildPersonResponseFromDomainPerson(domainPerson domain.Person) PersonResponse {
+	personResponse := &PersonResponse{
+		ID:     domainPerson.ID,
+		Name:   domainPerson.Name,
+		Gender: string(domainPerson.Gender),
+	}
+
+	personResponse.Children = []PersonResponse{}
+	for _, children := range domainPerson.Children {
+		if children.Name == "" {
+			continue
+		}
+
+		domainChildren := buildPersonResponseFromDomainPerson(*children)
+		personResponse.Children = append(personResponse.Children, domainChildren)
+	}
+
+	personResponse.Parents = []PersonResponse{}
+	for _, parent := range domainPerson.Parents {
+		if parent.Name == "" {
+			continue
+		}
+
+		domainParent := buildPersonResponseFromDomainPerson(*parent)
+		personResponse.Parents = append(personResponse.Parents, domainParent)
+	}
+
+	return *personResponse
+}
+
 // TODO add tests for required fields on api
 func Store(personController controller.PersonController) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
@@ -150,10 +184,7 @@ func Store(personController controller.PersonController) gin.HandlerFunc {
 			return
 		}
 
-		//TODO: Maybe add some validation?
-
-		ctx.JSON(200, person)
+		//TODO: Add request validation
+		ctx.JSON(200, buildPersonResponseFromDomainPerson(*person))
 	})
 }
-
-// var personID string

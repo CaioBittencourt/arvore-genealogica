@@ -61,49 +61,6 @@ func buildDomainPersonFromRepositoryPerson(personRepository Person) domain.Perso
 	return person
 }
 
-// func buildFamilyMembersFromPersonRelatives(
-// 	personRepository Person,
-// 	visitedPersonsMap map[string]bool,
-// 	personRelativesMap map[string]Person,
-// 	generation int) domain.FamilyGraphMember {
-// 	familyMember := domain.FamilyGraphMember{
-// 		ID:         personRepository.ID.Hex(),
-// 		Name:       personRepository.Name,
-// 		Gender:     domain.GenderType(personRepository.Gender),
-// 		Generation: generation,
-// 	}
-
-// 	for _, parentObjectID := range personRepository.Parents {
-// 		parentID := parentObjectID.Hex()
-// 		familyMember.ParentIDS = append(familyMember.ParentIDS, parentID)
-// 		if _, ok := personRelativesMap[parentID]; !ok {
-// 			continue
-// 		}
-
-// 		if !visitedPersonsMap[parentID] {
-// 			visitedPersonsMap[parentID] = true
-// 			parent := buildFamilyMembersFromPersonRelatives(personRelativesMap[parentID], visitedPersonsMap, personRelativesMap, generation+1)
-// 			familyMember.ParentToVisit = append(familyMember.ParentToVisit, &parent)
-// 		}
-// 	}
-
-// 	for _, childrenObjectID := range personRepository.Children {
-// 		childrenID := childrenObjectID.Hex()
-// 		familyMember.ChildrenIDS = append(familyMember.ChildrenIDS, childrenID)
-// 		if _, ok := personRelativesMap[childrenID]; !ok {
-// 			continue
-// 		}
-
-// 		if !visitedPersonsMap[childrenID] {
-// 			visitedPersonsMap[childrenID] = true
-// 			children := buildFamilyMembersFromPersonRelatives(personRelativesMap[childrenID], visitedPersonsMap, personRelativesMap, generation-1)
-// 			familyMember.ParentToVisit = append(familyMember.ParentToVisit, &children)
-// 		}
-// 	}
-
-// 	return familyMember
-// }
-
 func buildFamilyGraphFromPersonRelatives(personWithRelatives PersonWithRelatives) domain.FamilyGraph {
 	personRelativesMap := make(map[string]Person, len(personWithRelatives.Relatives)+1)
 
@@ -167,17 +124,6 @@ func buildFamilyRelationshipsFromPersonRelatives(
 	return &person
 }
 
-// adicionei um family member
-// func buildTreeFromPersonWithRelatives(ctx context.Context, personWithRelatives PersonWithRelatives) domain.FamilyGraph {
-
-// 	// visitedPersonsMap := map[string]bool{rootPersonID: true}
-// 	// familyTree := domain.FamilyGraph{
-// 	// 	Root: buildFamilyMembersFromPersonRelatives(personRelativesMap[rootPersonID], visitedPersonsMap, personRelativesMap, 0),
-// 	// }
-
-// 	return buildFamilyGraphFromPersonRelatives(personRelativesMap[rootPersonID], personRelativesMap, 0)
-// }
-
 func buildFamilyGraphFromPersonWithRelatives(ctx context.Context, personWithRelatives PersonWithRelatives) (domain.Person, error) {
 	personRelativesMap := make(map[string]*domain.Person, len(personWithRelatives.Relatives)+1)
 	person := domain.Person{
@@ -232,7 +178,6 @@ func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, pe
 		objectIDS = append(objectIDS, personObjectId)
 	}
 
-	// matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{personObjectId}}}}
 	matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{"$in", objectIDS}}}}}}
 	graphLookupParameters := bson.D{
 		{"from", personCollectionName},
@@ -265,11 +210,6 @@ func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, pe
 			return nil, err
 		}
 	}
-
-	// err = cursor.Decode(&personRelatives)
-	// if err != nil {
-	// 	return nil, err
-	// }
 
 	return personRelatives, nil
 }
@@ -391,7 +331,6 @@ func (pr PersonRepository) storePerson(ctx context.Context, person domain.Person
 	return &insertedPersonObjectID, nil
 }
 
-// TODO: ADD CONSTRAINT TO WHEN THERE IS ALREADY A MOM OR DAD REGISTERED ON MONGO
 func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
 	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
 		insertedPersonObjectID, err := pr.storePerson(sessCtx, person)

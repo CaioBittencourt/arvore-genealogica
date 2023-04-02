@@ -1,14 +1,10 @@
 FROM golang:1.20 AS base
-    # ENV GO111MODULE on
-
     WORKDIR /go/src/github.com/CaioBittencourt/arvore-genealogica
 
 FROM base as development
     RUN go install github.com/cortesi/modd/cmd/modd@latest && \
         go install github.com/go-delve/delve/cmd/dlv@latest
     RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.52.2
-
-#     VOLUME /home/caio/goWorkspace/src/github.com/CaioBittencourt/arvore-genealogica /go/src/github.com/CaioBittencourt/arvore-genealogica
 
     CMD [ "modd", "-f", "./modd.conf" ]
 

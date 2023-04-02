@@ -3,7 +3,6 @@ package domain
 import (
 	"container/list"
 	"errors"
-	"fmt"
 )
 
 type RelationshipType string
@@ -44,31 +43,6 @@ type Relationship struct {
 	Person       RelationshipPerson
 	Relationship RelationshipType
 }
-
-// type Person struct {
-// 	Person
-
-// 	BaconsNumber int64
-// }
-
-// Bread first search começando com Phoebe.
-// Visito as crianças, visito o pai
-// Vou adicionando geração quando pesquiso para o PAI e subtraindo qnd buscando pelos filhos.
-// adiciono visited nodes
-// crio um map com geração! e faço, geração do current node +1 -1 para pegar relationships
-
-// type FamilyTreeMember struct {
-// 	ID         string
-// 	Name       string
-// 	Gender     GenderType
-// 	Generation int
-
-// 	ChildrenToVisit []*FamilyTreeMember
-// 	ChildrenIDS     []string
-
-// 	ParentToVisit []*FamilyTreeMember
-// 	ParentIDS     []string
-// }
 
 type FamilyTree struct {
 	Root Person
@@ -150,14 +124,10 @@ func (p Person) isSibling(possibleSibling Person) bool {
 
 func (p Person) isCousin(possibleCousin Person) bool {
 	for _, parent := range p.Parents {
-		//luiz
 		for _, grandparent := range parent.Parents {
-			// zeze e tunico
 			for _, grandparentChildren := range grandparent.Children {
-				// claudia
 				for _, possibleCousinParent := range possibleCousin.Parents {
 					if possibleCousinParent.ID == grandparentChildren.ID {
-						fmt.Println(possibleCousinParent.Name, grandparentChildren.Name)
 						return true
 					}
 				}

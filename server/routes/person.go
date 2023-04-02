@@ -8,5 +8,6 @@ import (
 
 func RegisterPersonRoutes(router *gin.Engine, personController controller.PersonController) {
 	router.GET("/person/:id/tree", server.GetPersonFamilyTreeHandler(personController))
+	// router.GET("/person/:id/relationship", server.GetPersonFamilyTreeHandler(personController))
 	router.POST("/person", server.Store(personController))
 }

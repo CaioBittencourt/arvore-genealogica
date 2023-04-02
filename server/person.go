@@ -2,7 +2,6 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/CaioBittencourt/arvore-genealogica/controller"
@@ -53,14 +52,11 @@ func GetPersonFamilyTreeHandler(personController controller.PersonController) gi
 
 		familyTree, err := personController.GetFamilyTreeByPersonID(ctx, personID)
 		if err != nil {
-			fmt.Println("errorrrr", err)
-			// 	ctx.JSON(500, nil) // fazer error handling / error matching da camada de dominio com a do http
+			ctx.JSON(500, err) // fazer error handling / error matching da camada de dominio com a do http
+			return
 		}
 
 		var resMembers []PersonWithRelationship
-		// for _, member := range familyTree.Members {
-		// 	fmt.Printf("%+v\n", member)
-		// }
 		for _, member := range familyTree.Members {
 			personWithRelationship := PersonWithRelationship{
 				RelationshipPerson: RelationshipPerson{

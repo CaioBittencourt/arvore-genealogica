@@ -203,7 +203,7 @@ func convertIDStringToObjectsIDS(personIDS []string) ([]primitive.ObjectID, erro
 	return objectIDS, nil
 }
 
-func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, personIDS []string, connectFromField string, maxDepth *int) ([]PersonWithRelatives, error) {
+func (pr PersonRepository) graphlookupGetPersonRelativesByPersonIDS(ctx context.Context, personIDS []string, connectFromField string, maxDepth *int) ([]PersonWithRelatives, error) {
 	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
 
 	objectIDS, err := convertIDStringToObjectsIDS(personIDS)
@@ -267,7 +267,7 @@ func mergeRelativesIntoSet(relativesLists [][]Person) []Person {
 }
 
 func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personID string, maxDepth *int64) (*domain.FamilyGraph, error) {
-	result, err := pr.graphlookupGetPersonRelatives(ctx, []string{personID}, "parentIds", nil)
+	result, err := pr.graphlookupGetPersonRelativesByPersonIDS(ctx, []string{personID}, "parentIds", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -290,8 +290,8 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 	}
 
 	if len(parentsAndGrandParentsIDS) > 0 {
-		depth := 1 // get brothers and cousins, this could be configurable
-		parentAndGrandParentsWithRelatives, err := pr.graphlookupGetPersonRelatives(ctx, parentsAndGrandParentsIDS, "childrenIds", &depth)
+		depth := 1 //NOTE: get brothers and cousins, this could be configurable
+		parentAndGrandParentsWithRelatives, err := pr.graphlookupGetPersonRelativesByPersonIDS(ctx, parentsAndGrandParentsIDS, "childrenIds", &depth)
 		if err != nil {
 			return nil, err
 		}

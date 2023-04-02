@@ -184,11 +184,6 @@ func (p Person) FindPreviouseGenerationRelationships(personToFindRelationships P
 		return &relationship
 	}
 
-	if p.isCousin(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, CousinRelashionship)
-		return &relationship
-	}
-
 	return nil
 }
 
@@ -200,6 +195,11 @@ func (p Person) FindCurrentGenerationRelationships(personToFindRelationships Per
 
 	if p.isSpouse(personToFindRelationships) {
 		relationship := buildRelationshipWithPerson(personToFindRelationships, SpouseRelashionship)
+		return &relationship
+	}
+
+	if p.isCousin(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, CousinRelashionship)
 		return &relationship
 	}
 

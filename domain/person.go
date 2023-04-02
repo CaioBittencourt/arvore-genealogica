@@ -9,11 +9,13 @@ import (
 type RelationshipType string
 
 const (
-	ParentRelashionship  RelationshipType = "parent"
-	ChildRelashionship   RelationshipType = "child"
-	SiblingRelashionship RelationshipType = "sibling"
-	NephewRelashionship  RelationshipType = "nephew"
-	CousinRelashionship  RelationshipType = "cousin"
+	ParentRelashionship    RelationshipType = "parent"
+	ChildRelashionship     RelationshipType = "child"
+	SiblingRelashionship   RelationshipType = "sibling"
+	NephewRelashionship    RelationshipType = "nephew"
+	CousinRelashionship    RelationshipType = "cousin"
+	SpouseRelashionship    RelationshipType = "spouse"
+	AuntUncleRelashionship RelationshipType = "aunt/uncle"
 )
 
 type GenderType string
@@ -148,10 +150,14 @@ func (p Person) isSibling(possibleSibling Person) bool {
 
 func (p Person) isCousin(possibleCousin Person) bool {
 	for _, parent := range p.Parents {
+		//luiz
 		for _, grandparent := range parent.Parents {
+			// zeze e tunico
 			for _, grandparentChildren := range grandparent.Children {
+				// claudia
 				for _, possibleCousinParent := range possibleCousin.Parents {
 					if possibleCousinParent.ID == grandparentChildren.ID {
+						fmt.Println(possibleCousinParent.Name, grandparentChildren.Name)
 						return true
 					}
 				}
@@ -160,6 +166,79 @@ func (p Person) isCousin(possibleCousin Person) bool {
 	}
 
 	return false
+}
+
+func (p Person) isSpouse(possibleSpouse Person) bool {
+	for _, children := range p.Children {
+		for _, possibleSpouseChildren := range possibleSpouse.Children {
+			if possibleSpouseChildren.ID == children.ID {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (p Person) isUncleOrAunt(possibleUncle Person) bool {
+	for _, parent := range p.Parents {
+		for _, grandParent := range parent.Parents {
+			for _, possibleUncle := range possibleUncle.Parents {
+				if possibleUncle.ID == grandParent.ID {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+func (p Person) FindNextGenerationRelationships(personToFindRelationships Person) *Relationship {
+	if p.isParent(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, ParentRelashionship)
+		return &relationship
+	}
+
+	if p.isUncleOrAunt(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, AuntUncleRelashionship)
+		return &relationship
+	}
+
+	return nil
+}
+
+func (p Person) FindPreviouseGenerationRelationships(personToFindRelationships Person) *Relationship {
+	if p.isChildren(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, ChildRelashionship)
+		return &relationship
+	}
+
+	if p.isNephew(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, NephewRelashionship)
+		return &relationship
+	}
+
+	if p.isCousin(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, CousinRelashionship)
+		return &relationship
+	}
+
+	return nil
+}
+
+func (p Person) FindCurrentGenerationRelationships(personToFindRelationships Person) *Relationship {
+	if p.isSibling(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, SiblingRelashionship)
+		return &relationship
+	}
+
+	if p.isSpouse(personToFindRelationships) {
+		relationship := buildRelationshipWithPerson(personToFindRelationships, SpouseRelashionship)
+		return &relationship
+	}
+
+	return nil
 }
 
 func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
@@ -174,8 +253,6 @@ func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
 
 	personByGeneration := make(map[int][]*Person)
 	for currentPerson != nil || visitPersonQueue.Len() > 0 {
-		fmt.Println(currentPerson.Name, currentPerson.ID)
-
 		for _, currentParent := range currentPerson.Parents {
 			if _, ok := personAlreadyOnQueue[currentParent.ID]; !ok {
 				visitPersonQueue.PushBack(currentParent)
@@ -190,35 +267,13 @@ func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
 			}
 		}
 
-		previousGeneration := currentPerson.Generation - 1
-		personsToCheckRelationship, ok := personByGeneration[previousGeneration]
-		if ok {
-			for _, currentPersonToCheck := range personsToCheckRelationship {
-				// check for children / nephew / cousins
-				if currentPerson.isChildren(*currentPersonToCheck) {
-					currentPerson.Relationships = append(currentPerson.Relationships, buildRelationshipWithPerson(*currentPersonToCheck, ChildRelashionship))
-					continue
-				}
-
-				if currentPerson.isNephew(*currentPersonToCheck) {
-					currentPerson.Relationships = append(currentPerson.Relationships, buildRelationshipWithPerson(*currentPersonToCheck, NephewRelashionship))
-					continue
-				}
-
-				if currentPerson.isCousin(*currentPersonToCheck) {
-					currentPerson.Relationships = append(currentPerson.Relationships, buildRelationshipWithPerson(*currentPersonToCheck, CousinRelashionship))
-					continue
-				}
-			}
-		}
-
 		nextGeneration := currentPerson.Generation + 1
-		personsToCheckRelationship, ok = personByGeneration[nextGeneration]
+		personsToCheckRelationship, ok := personByGeneration[nextGeneration]
 		if ok {
 			for _, currentPersonToCheck := range personsToCheckRelationship {
-				if currentPerson.isParent(*currentPersonToCheck) {
-					currentPerson.Relationships = append(currentPerson.Relationships, buildRelationshipWithPerson(*currentPersonToCheck, ParentRelashionship))
-					continue
+				relationship := currentPerson.FindNextGenerationRelationships(*currentPersonToCheck)
+				if relationship != nil {
+					currentPerson.Relationships = append(currentPerson.Relationships, *relationship)
 				}
 			}
 		}
@@ -227,9 +282,20 @@ func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
 		personsToCheckRelationship, ok = personByGeneration[currentGeneration]
 		if ok {
 			for _, currentPersonToCheck := range personsToCheckRelationship {
-				if currentPerson.isSibling(*currentPersonToCheck) {
-					currentPerson.Relationships = append(currentPerson.Relationships, buildRelationshipWithPerson(*currentPersonToCheck, SiblingRelashionship))
-					continue
+				relationship := currentPerson.FindCurrentGenerationRelationships(*currentPersonToCheck)
+				if relationship != nil {
+					currentPerson.Relationships = append(currentPerson.Relationships, *relationship)
+				}
+			}
+		}
+
+		previousGeneration := currentPerson.Generation - 1
+		personsToCheckRelationship, ok = personByGeneration[previousGeneration]
+		if ok {
+			for _, currentPersonToCheck := range personsToCheckRelationship {
+				relationship := currentPerson.FindPreviouseGenerationRelationships(*currentPersonToCheck)
+				if relationship != nil {
+					currentPerson.Relationships = append(currentPerson.Relationships, *relationship)
 				}
 			}
 		}

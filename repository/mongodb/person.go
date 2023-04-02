@@ -27,11 +27,12 @@ type PersonWithRelatives struct {
 }
 
 type Person struct {
-	ID       primitive.ObjectID   `bson:"_id,omitempty"`
-	Name     string               `bson:"name,omitempty"`
-	Gender   string               `bson:"gender,omitempty"`
-	Parents  []primitive.ObjectID `bson:"parents,omitempty"`
-	Children []primitive.ObjectID `bson:"children,omitempty"`
+	ID         primitive.ObjectID   `bson:"_id,omitempty"`
+	Name       string               `bson:"name,omitempty"`
+	Gender     string               `bson:"gender,omitempty"`
+	Parents    []primitive.ObjectID `bson:"parents,omitempty"`
+	Children   []primitive.ObjectID `bson:"children,omitempty"`
+	DepthField uint                 `bson:"depthField,omitempty"`
 }
 
 type PersonRepository struct {
@@ -219,15 +220,20 @@ func buildFamilyGraphFromPersonWithRelatives(ctx context.Context, personWithRela
 
 }
 
-func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, personID string, connectFromField string, maxDepth *int) (*PersonWithRelatives, error) {
+func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, personIDS []string, connectFromField string, maxDepth *int) ([]PersonWithRelatives, error) {
 	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
 
-	personObjectId, err := primitive.ObjectIDFromHex(personID)
-	if err != nil {
-		return nil, err
+	var objectIDS []primitive.ObjectID
+	for _, personID := range personIDS {
+		personObjectId, err := primitive.ObjectIDFromHex(personID)
+		if err != nil {
+			return nil, err
+		}
+		objectIDS = append(objectIDS, personObjectId)
 	}
 
-	matchStage := bson.D{{"$match", bson.D{{"_id", personObjectId}}}}
+	// matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{personObjectId}}}}
+	matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{"$in", objectIDS}}}}}}
 	graphLookupParameters := bson.D{
 		{"from", personCollectionName},
 		{"startWith", fmt.Sprintf("$%s", connectFromField)},
@@ -252,20 +258,20 @@ func (pr PersonRepository) graphlookupGetPersonRelatives(ctx context.Context, pe
 		return nil, err
 	}
 
-	if ok := cursor.Next(ctx); !ok {
+	var personRelatives []PersonWithRelatives
+	if err := cursor.All(ctx, &personRelatives); err != nil {
 		if err := cursor.Err(); err != nil {
 			log.WithError(err).Warn("cursor: failed to fetch family tree by person id")
 			return nil, err
 		}
 	}
 
-	var personRelatives PersonWithRelatives
-	err = cursor.Decode(&personRelatives)
-	if err != nil {
-		return nil, err
-	}
+	// err = cursor.Decode(&personRelatives)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	return &personRelatives, nil
+	return personRelatives, nil
 }
 
 func mergeRelativesIntoSet(relativesLists [][]Person) []Person {
@@ -288,32 +294,42 @@ func mergeRelativesIntoSet(relativesLists [][]Person) []Person {
 }
 
 func (pr PersonRepository) GetPersonFamilyTreeByID(ctx context.Context, personID string, maxDepth *int64) (*domain.FamilyGraph, error) {
-	personWithAscendants, err := pr.graphlookupGetPersonRelatives(ctx, personID, "parents", nil)
+	result, err := pr.graphlookupGetPersonRelatives(ctx, []string{personID}, "parents", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	//NOTE: find brothers, cousins and etc. If we wanted to find more relations we could go higher on the ascendant. but since the challenge goes only to that level...
+	if len(result) == 0 {
+		return nil, errors.New("unable to find person with that id")
+	}
+
+	personWithAscendants := result[0]
+
 	relativesLists := make([][]Person, len(personWithAscendants.Parents))
 	relativesLists = append(relativesLists, personWithAscendants.Relatives)
-	for _, parent := range personWithAscendants.Parents {
-		maxDepth := 1 // get brothers and cousins, this could be configurable
-		parentRelatives, err := pr.graphlookupGetPersonRelatives(ctx, parent.Hex(), "children", &maxDepth)
-		if err != nil {
-			return nil, err
-		}
 
-		relativesLists = append(relativesLists, parentRelatives.Relatives)
+	//NOTE: find brothers, cousins and etc. If we wanted to find more relations we could go higher on the ascendant. but since the challenge goes only to that level...
+	var parentsAndGrandParentsIDS []string
+	for _, person := range personWithAscendants.Relatives {
+		if person.DepthField == 0 || person.DepthField == 1 {
+			parentsAndGrandParentsIDS = append(parentsAndGrandParentsIDS, person.ID.Hex())
+		}
+	}
+
+	depth := 1 // get brothers and cousins, this could be configurable
+	parentAndGrandParentsWithRelatives, err := pr.graphlookupGetPersonRelatives(ctx, parentsAndGrandParentsIDS, "children", &depth)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, parentAndGrandparent := range parentAndGrandParentsWithRelatives {
+		relativesLists = append(relativesLists, parentAndGrandparent.Relatives)
 	}
 
 	personWithRelatives := personWithAscendants
 	personWithRelatives.Relatives = mergeRelativesIntoSet(relativesLists)
 
-	familyTree := buildFamilyGraphFromPersonRelatives(*personWithRelatives)
-	for _, member := range familyTree.Members {
-		fmt.Printf("%+v\n", member)
-	}
-	return nil, errors.New("aaaa")
+	familyTree := buildFamilyGraphFromPersonRelatives(personWithRelatives)
 
 	return &familyTree, nil
 }

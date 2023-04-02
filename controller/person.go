@@ -8,7 +8,7 @@ import (
 )
 
 type PersonController interface {
-	GetFamilyTreeByPersonID(ctx context.Context, personID string) (*domain.FamilyTree, error)
+	GetFamilyTreeByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error)
 	Store(ctx context.Context, person domain.Person) (*domain.Person, error)
 }
 
@@ -24,8 +24,16 @@ func NewPersonController(
 	}
 }
 
-func (s personController) GetFamilyTreeByPersonID(ctx context.Context, personID string) (*domain.FamilyTree, error) {
+func (s personController) GetFamilyTreeByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error) {
 	familyTree, err := s.personRepository.GetPersonFamilyTreeByID(ctx, personID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := familyTree.BuildFamilyRelationships(personID); err != nil {
+		return nil, err
+	}
+
 	return familyTree, err
 }
 

@@ -28,17 +28,65 @@ type PersonResponse struct {
 	Children []PersonResponse `json:"children"`
 }
 
+type RelationshipPerson struct {
+	ID     string
+	Name   string
+	Gender string
+}
+
+type Relationship struct {
+	Person       RelationshipPerson
+	Relationship string
+}
+
+type PersonWithRelationship struct {
+	RelationshipPerson
+	Relationships []Relationship
+}
+type PersonTreeResponse struct {
+	Members []PersonWithRelationship
+}
+
 func GetPersonFamilyTreeHandler(personController controller.PersonController) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personID := ctx.Param("id")
 
-		person, err := personController.GetFamilyTreeByPersonID(ctx, personID)
+		familyTree, err := personController.GetFamilyTreeByPersonID(ctx, personID)
 		if err != nil {
 			fmt.Println("errorrrr", err)
 			// 	ctx.JSON(500, nil) // fazer error handling / error matching da camada de dominio com a do http
 		}
 
-		ctx.JSON(200, person)
+		var resMembers []PersonWithRelationship
+		// for _, member := range familyTree.Members {
+		// 	fmt.Printf("%+v\n", member)
+		// }
+		for _, member := range familyTree.Members {
+			personWithRelationship := PersonWithRelationship{
+				RelationshipPerson: RelationshipPerson{
+					Name:   member.Name,
+					ID:     member.ID,
+					Gender: string(member.Gender),
+				},
+			}
+
+			for _, relationship := range member.Relationships {
+				personWithRelationship.Relationships = append(
+					personWithRelationship.Relationships,
+					Relationship{
+						Relationship: string(relationship.Relationship),
+						Person: RelationshipPerson{
+							Name:   relationship.Person.Name,
+							ID:     relationship.Person.ID,
+							Gender: string(relationship.Person.Gender),
+						},
+					})
+			}
+
+			resMembers = append(resMembers, personWithRelationship)
+		}
+
+		ctx.JSON(200, PersonTreeResponse{Members: resMembers})
 	})
 }
 func (pr StorePersonRequest) validate() error {
@@ -60,18 +108,18 @@ func buildPersonFromStorePersonRequest(personReq StorePersonRequest) domain.Pers
 	person.Gender = domain.GenderType(personReq.Gender)
 
 	if personReq.FatherID != nil {
-		person.Parents = append(person.Parents, domain.Person{ID: *personReq.FatherID})
+		person.Parents = append(person.Parents, &domain.Person{ID: *personReq.FatherID})
 	}
 
 	if personReq.MotherID != nil {
-		person.Parents = append(person.Parents, domain.Person{ID: *personReq.MotherID})
+		person.Parents = append(person.Parents, &domain.Person{ID: *personReq.MotherID})
 	}
 
 	if len(personReq.ChildrenIDs) > 0 {
-		children := make([]domain.Person, len(personReq.ChildrenIDs))
+		children := make([]*domain.Person, len(personReq.ChildrenIDs))
 		for _, childrenID := range personReq.ChildrenIDs {
 
-			children = append(children, domain.Person{ID: childrenID})
+			children = append(children, &domain.Person{ID: childrenID})
 		}
 
 		person.Children = children
@@ -99,7 +147,6 @@ func Store(personController controller.PersonController) gin.HandlerFunc {
 		}
 
 		personToStore := buildPersonFromStorePersonRequest(req)
-		fmt.Println(personToStore)
 		person, err := personController.Store(ctx, personToStore)
 		if err != nil {
 			log.WithError(err).Error("error saving person")

@@ -33,15 +33,6 @@ func (s GenderType) IsValid() bool {
 	return false
 }
 
-// type PersonWithRelatives struct {
-// 	Person
-// 	Relatives []Person
-// }
-
-// func (pwr PersonWithRelatives) BuildFamilyGraph(possibleParent Person) bool {
-
-// }
-
 type RelationshipPerson struct {
 	ID     string
 	Name   string
@@ -289,4 +280,61 @@ func (fg *FamilyGraph) PopulateWithFamilyRelationships(personID string) error {
 	}
 
 	return nil
+}
+
+type PersonJumps struct {
+	Person         *Person
+	JumpsUntilHere uint
+}
+
+func (fg *FamilyGraph) BaconsNumber(personIDA string, personIDB string) *uint {
+	personA, ok := fg.Members[personIDA]
+	if !ok {
+		return nil
+	}
+
+	personB, ok := fg.Members[personIDB]
+	if !ok {
+		return nil
+	}
+
+	currentPerson := &PersonJumps{Person: personA, JumpsUntilHere: 0}
+	visitPersonQueue := list.New()
+	personAlreadyOnQueue := make(map[string]bool)
+	personAlreadyOnQueue[currentPerson.Person.ID] = true
+
+	var minimumJumps *uint
+	// BSF to find the shortest path
+	for currentPerson != nil || visitPersonQueue.Len() > 0 {
+
+		if currentPerson.Person.ID == personB.ID {
+			minimumJumps = &currentPerson.JumpsUntilHere
+			break
+		}
+
+		for _, currentParent := range currentPerson.Person.Parents {
+			if _, ok := personAlreadyOnQueue[currentParent.ID]; !ok {
+				visitPersonQueue.PushBack(PersonJumps{Person: currentParent, JumpsUntilHere: currentPerson.JumpsUntilHere + 1})
+				personAlreadyOnQueue[currentParent.ID] = true
+			}
+		}
+
+		for _, currentChildren := range currentPerson.Person.Children {
+			if _, ok := personAlreadyOnQueue[currentChildren.ID]; !ok {
+				visitPersonQueue.PushBack(PersonJumps{Person: currentChildren, JumpsUntilHere: currentPerson.JumpsUntilHere + 1})
+				personAlreadyOnQueue[currentChildren.ID] = true
+			}
+		}
+
+		nextPerson := visitPersonQueue.Front()
+		if nextPerson != nil {
+			visitPersonQueue.Remove(nextPerson)
+			person := nextPerson.Value.(*PersonJumps)
+			currentPerson = person
+		} else {
+			currentPerson = nil
+		}
+	}
+
+	return minimumJumps
 }

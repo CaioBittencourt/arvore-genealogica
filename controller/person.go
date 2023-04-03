@@ -24,8 +24,8 @@ func NewPersonController(
 	}
 }
 
-func (s personController) GetFamilyGraphByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error) {
-	familyGraph, err := s.personRepository.GetPersonFamilyGraphByID(ctx, personID, nil)
+func (pc personController) GetFamilyGraphByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error) {
+	familyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, personID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +37,35 @@ func (s personController) GetFamilyGraphByPersonID(ctx context.Context, personID
 	return familyGraph, err
 }
 
-func (s personController) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
-	insertedPerson, err := s.personRepository.Store(ctx, person)
+func (pc personController) BaconsNumber(ctx context.Context, firstPersonID string, secondPersonID string) ([]domain.Person, *uint, error) {
+	var baconsNumber *uint
+
+	familyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, firstPersonID, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	baconsNumber = familyGraph.BaconsNumber(firstPersonID, secondPersonID)
+	if baconsNumber != nil {
+		return []domain.Person{*familyGraph.Members[firstPersonID], *familyGraph.Members[secondPersonID]}, baconsNumber, nil
+	}
+
+	// NOTE: the graphs are different, i have to search in both graphs in case the first one doesnt have both members!
+	secondFamilyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, secondPersonID, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	baconsNumber = secondFamilyGraph.BaconsNumber(firstPersonID, secondPersonID)
+	if baconsNumber == nil {
+		return nil, nil, nil
+	}
+
+	return []domain.Person{*secondFamilyGraph.Members[firstPersonID], *secondFamilyGraph.Members[secondPersonID]}, baconsNumber, nil
+}
+
+func (pc personController) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
+	insertedPerson, err := pc.personRepository.Store(ctx, person)
 	if err != nil {
 		return nil, err
 	}

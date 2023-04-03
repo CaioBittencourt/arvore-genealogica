@@ -30,7 +30,7 @@ func (s personController) GetFamilyGraphByPersonID(ctx context.Context, personID
 		return nil, err
 	}
 
-	if err := familyGraph.BuildFamilyRelationships(personID); err != nil {
+	if err := familyGraph.PopulateWithFamilyRelationships(personID); err != nil {
 		return nil, err
 	}
 

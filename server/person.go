@@ -28,22 +28,22 @@ type PersonResponse struct {
 }
 
 type RelationshipPerson struct {
-	ID     string
-	Name   string
-	Gender string
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Gender string `json:"gender"`
 }
 
 type Relationship struct {
-	Person       RelationshipPerson
-	Relationship string
+	Person       RelationshipPerson `json:"person"`
+	Relationship string             `json:"relationship"`
 }
 
 type PersonWithRelationship struct {
 	RelationshipPerson
-	Relationships []Relationship
+	Relationships []Relationship `json:"relationships"`
 }
 type PersonTreeResponse struct {
-	Members []PersonWithRelationship
+	Members []PersonWithRelationship `json:"members"`
 }
 
 func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph) []PersonWithRelationship {

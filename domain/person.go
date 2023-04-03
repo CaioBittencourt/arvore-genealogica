@@ -33,6 +33,15 @@ func (s GenderType) IsValid() bool {
 	return false
 }
 
+// type PersonWithRelatives struct {
+// 	Person
+// 	Relatives []Person
+// }
+
+// func (pwr PersonWithRelatives) BuildFamilyGraph(possibleParent Person) bool {
+
+// }
+
 type RelationshipPerson struct {
 	ID     string
 	Name   string
@@ -53,7 +62,7 @@ type Person struct {
 	Parents       []*Person
 	Children      []*Person
 	Generation    int
-	Relationships []Relationship
+	Relationships map[string]Relationship
 }
 
 func buildRelationshipWithPerson(person Person, relationshipType RelationshipType) Relationship {
@@ -206,7 +215,7 @@ func (p Person) FindCurrentGenerationRelationships(personToFindRelationships Per
 	return nil
 }
 
-func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
+func (fg *FamilyGraph) PopulateWithFamilyRelationships(personID string) error {
 	currentPerson, ok := fg.Members[personID]
 	if !ok {
 		return errors.New("person not in graph")
@@ -218,6 +227,8 @@ func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
 
 	personByGeneration := make(map[int][]*Person)
 	for currentPerson != nil || visitPersonQueue.Len() > 0 {
+		currentPerson.Relationships = make(map[string]Relationship)
+
 		for _, currentParent := range currentPerson.Parents {
 			if _, ok := personAlreadyOnQueue[currentParent.ID]; !ok {
 				visitPersonQueue.PushBack(currentParent)
@@ -236,9 +247,9 @@ func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
 		personsToCheckRelationship, ok := personByGeneration[nextGeneration]
 		if ok {
 			for _, currentPersonToCheck := range personsToCheckRelationship {
-				relationship := currentPerson.FindNextGenerationRelationships(*currentPersonToCheck)
+				relationship := currentPersonToCheck.FindPreviouseGenerationRelationships(*currentPerson)
 				if relationship != nil {
-					currentPerson.Relationships = append(currentPerson.Relationships, *relationship)
+					currentPersonToCheck.Relationships[currentPerson.ID] = *relationship
 				}
 			}
 		}
@@ -247,9 +258,9 @@ func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
 		personsToCheckRelationship, ok = personByGeneration[currentGeneration]
 		if ok {
 			for _, currentPersonToCheck := range personsToCheckRelationship {
-				relationship := currentPerson.FindCurrentGenerationRelationships(*currentPersonToCheck)
+				relationship := currentPersonToCheck.FindCurrentGenerationRelationships(*currentPerson)
 				if relationship != nil {
-					currentPerson.Relationships = append(currentPerson.Relationships, *relationship)
+					currentPersonToCheck.Relationships[currentPerson.ID] = *relationship
 				}
 			}
 		}
@@ -258,9 +269,9 @@ func (fg *FamilyGraph) BuildFamilyRelationships(personID string) error {
 		personsToCheckRelationship, ok = personByGeneration[previousGeneration]
 		if ok {
 			for _, currentPersonToCheck := range personsToCheckRelationship {
-				relationship := currentPerson.FindPreviouseGenerationRelationships(*currentPersonToCheck)
+				relationship := currentPersonToCheck.FindNextGenerationRelationships(*currentPerson)
 				if relationship != nil {
-					currentPerson.Relationships = append(currentPerson.Relationships, *relationship)
+					currentPersonToCheck.Relationships[currentPerson.ID] = *relationship
 				}
 			}
 		}

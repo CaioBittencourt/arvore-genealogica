@@ -107,6 +107,7 @@ func buildFamilyGraphFromPersonRelatives(personWithRelatives PersonWithRelatives
 	return domain.FamilyGraph{Members: graphMembersMapped}
 }
 
+// TODO: Move this to domain. Build the graph with person with relatives from the db.
 func buildFamilyRelationshipsFromPersonRelatives(
 	personRepository Person,
 	personRelativesMap map[string]Person,
@@ -149,47 +150,6 @@ func buildFamilyRelationshipsFromPersonRelatives(
 	return &person
 }
 
-func buildFamilyGraphFromPersonWithRelatives(ctx context.Context, personWithRelatives PersonWithRelatives) (domain.Person, error) {
-	personRelativesMap := make(map[string]*domain.Person, len(personWithRelatives.Relatives)+1)
-	person := domain.Person{
-		ID:     personWithRelatives.ID.Hex(),
-		Name:   personWithRelatives.Name,
-		Gender: domain.GenderType(personWithRelatives.Gender),
-	}
-
-	for _, parent := range personWithRelatives.ParentIDS {
-		person.Parents = append(person.Parents, &domain.Person{ID: parent.Hex()})
-	}
-
-	for _, children := range personWithRelatives.ChildrenIDS {
-		person.Children = append(person.Children, &domain.Person{ID: children.Hex()})
-	}
-
-	personRelativesMap[person.ID] = &person
-	for _, relatedPerson := range personWithRelatives.Relatives {
-		person := buildDomainPersonFromRepositoryPerson(relatedPerson)
-		personRelativesMap[person.ID] = &person
-	}
-
-	for _, currentPerson := range personRelativesMap {
-		for i, emptyParent := range currentPerson.Parents {
-			parent := personRelativesMap[emptyParent.ID]
-			if parent != nil {
-				currentPerson.Parents[i] = parent
-			}
-		}
-
-		for i, emptyChildren := range currentPerson.Children {
-			children := personRelativesMap[emptyChildren.ID]
-			if children != nil {
-				currentPerson.Children[i] = children
-			}
-		}
-	}
-
-	return person, nil
-
-}
 func convertIDStringToObjectsIDS(personIDS []string) ([]primitive.ObjectID, error) {
 	var objectIDS []primitive.ObjectID
 	for _, personID := range personIDS {

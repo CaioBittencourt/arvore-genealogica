@@ -65,6 +65,7 @@ func (pc personController) BaconsNumber(ctx context.Context, firstPersonID strin
 }
 
 func (pc personController) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
+	// incest: parent being inserted: my father or mother are in eachothers graphs?
 	insertedPerson, err := pc.personRepository.Store(ctx, person)
 	if err != nil {
 		return nil, err

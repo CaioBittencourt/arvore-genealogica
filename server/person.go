@@ -116,13 +116,9 @@ func buildPersonFromStorePersonRequest(personReq StorePersonRequest) domain.Pers
 	}
 
 	if len(personReq.ChildrenIDs) > 0 {
-		children := make([]*domain.Person, len(personReq.ChildrenIDs))
 		for _, childrenID := range personReq.ChildrenIDs {
-
-			children = append(children, &domain.Person{ID: childrenID})
+			person.Children = append(person.Children, &domain.Person{ID: childrenID})
 		}
-
-		person.Children = children
 	}
 
 	return person

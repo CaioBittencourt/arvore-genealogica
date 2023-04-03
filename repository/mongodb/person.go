@@ -32,6 +32,8 @@ type Person struct {
 	Gender      string               `bson:"gender,omitempty"`
 	ParentIDS   []primitive.ObjectID `bson:"parentIds,omitempty"`
 	ChildrenIDS []primitive.ObjectID `bson:"childrenIds,omitempty"`
+	SpouseIDS   []primitive.ObjectID `bson:"spouseIds,omitempty"`
+	Spouses     []Person             `bson:"spouses,omitempty"`
 	Parents     []Person             `bson:"parents,omitempty"`
 	Children    []Person             `bson:"children,omitempty"`
 	DepthField  uint                 `bson:"depthField,omitempty"`
@@ -262,23 +264,35 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 	}
 
 	personWithRelatives := personWithAscendants
+
+	spouseIds := []string{personWithRelatives.ID.Hex()}
+	for _, relative := range personWithRelatives.Relatives {
+		spouseIds = append(spouseIds, relative.ID.Hex())
+	}
 	personWithRelatives.Relatives = mergeRelativesIntoSet(relativesLists)
 
+	// pega ids de todos os spouses
 	familyGraph := buildFamilyGraphFromPersonRelatives(personWithRelatives)
 
 	return &familyGraph, nil
 }
 
-func (pr PersonRepository) GetDescendantsByPersonID(ctx context.Context, personID string, maxDepth *int64) ([]domain.Person, error) {
-	return nil, nil
-}
-
-func (pr PersonRepository) addChildrenToParents(ctx context.Context, parentIDS []primitive.ObjectID, childrenID primitive.ObjectID) error {
+func (pr PersonRepository) addChildrenToParents(ctx context.Context, parentIDS []string, childrenID string) error {
 	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
 
+	childrenObjectID, err := primitive.ObjectIDFromHex(childrenID)
+	if err != nil {
+		return err
+	}
+
+	parentsObjectIDS, err := convertIDStringToObjectsIDS(parentIDS)
+	if err != nil {
+		return err
+	}
+
 	if _, err := personCollection.UpdateMany(ctx,
-		bson.D{{"_id", bson.D{{"$in", parentIDS}}}},
-		bson.D{{"$addToSet", bson.D{{"childrenIds", childrenID}}}},
+		bson.D{{"_id", bson.D{{"$in", parentsObjectIDS}}}},
+		bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
 	); err != nil {
 		return err
 	}
@@ -298,21 +312,32 @@ func (pr PersonRepository) storePerson(ctx context.Context, person domain.Person
 		childrenIDs = append(childrenIDs, childrenObjectId)
 	}
 
-	parents := []primitive.ObjectID{}
+	parentIDS := []primitive.ObjectID{}
 	for _, parent := range person.Parents {
 		parentObjectID, err := primitive.ObjectIDFromHex(parent.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		parents = append(parents, parentObjectID)
+		parentIDS = append(parentIDS, parentObjectID)
+	}
+
+	spouseIDS := []primitive.ObjectID{}
+	for _, spouse := range person.Spouses {
+		spouseObjectID, err := primitive.ObjectIDFromHex(spouse.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		spouseIDS = append(spouseIDS, spouseObjectID)
 	}
 
 	insertedPerson, err := personCollection.InsertOne(ctx, bson.D{
 		{"name", person.Name},
 		{"gender", person.Gender},
-		{"parentIds", parents},
+		{"parentIds", parentIDS},
 		{"childrenIds", childrenIDs},
+		{"spouseIds", spouseIDS},
 	})
 	if err != nil {
 		return nil, err
@@ -325,7 +350,7 @@ func (pr PersonRepository) storePerson(ctx context.Context, person domain.Person
 
 	return &insertedPersonObjectID, nil
 }
-func (pr PersonRepository) GetPersonWithImmediateRelativesByIDS(ctx context.Context, personIDS []string) ([]domain.Person, error) {
+func (pr PersonRepository) getPersonWithImmediateRelativesByIDS(ctx context.Context, personIDS []string) ([]Person, error) {
 	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
 
 	objectIDS, err := convertIDStringToObjectsIDS(personIDS)
@@ -348,6 +373,7 @@ func (pr PersonRepository) GetPersonWithImmediateRelativesByIDS(ctx context.Cont
 		{"foreignField", "_id"},
 		{"as", "children"},
 	}}}
+
 	pipelineStages := bson.A{
 		matchStage,
 		lookupParentsStage,
@@ -367,30 +393,140 @@ func (pr PersonRepository) GetPersonWithImmediateRelativesByIDS(ctx context.Cont
 		}
 	}
 
-	domainPersonsWithRelatives := buildDomainPersonsFromRepositoryPersons(persons)
+	return persons, nil
+}
 
-	return domainPersonsWithRelatives, nil
+func (pr PersonRepository) getPersonsByIDS(ctx context.Context, IDS []string) ([]Person, error) {
+	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
+
+	objectIDS, err := convertIDStringToObjectsIDS(IDS)
+	if err != nil {
+		return nil, err
+	}
+
+	cursor, err := personCollection.Find(ctx, bson.D{{"_id", bson.D{{"$in", objectIDS}}}})
+	if err != nil {
+		return nil, err
+	}
+
+	var persons []Person
+	if err := cursor.All(ctx, &persons); err != nil {
+		if err := cursor.Err(); err != nil {
+			log.WithError(err).Warn("cursor: failed to get persons by ids")
+			return nil, err
+		}
+	}
+
+	return persons, nil
+}
+
+func (pr PersonRepository) getPersonsByChildrenIDS(ctx context.Context, IDS []string) ([]Person, error) {
+	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
+
+	objectIDS, err := convertIDStringToObjectsIDS(IDS)
+	if err != nil {
+		return nil, err
+	}
+
+	cursor, err := personCollection.Find(ctx, bson.D{{"childrenIds", bson.D{{"$in", objectIDS}}}})
+	if err != nil {
+		return nil, err
+	}
+
+	var persons []Person
+	if err := cursor.All(ctx, &persons); err != nil {
+		if err := cursor.Err(); err != nil {
+			log.WithError(err).Warn("cursor: failed to get persons by ids")
+			return nil, err
+		}
+	}
+
+	return persons, nil
+}
+
+func (pr PersonRepository) addSpouseToPersons(ctx context.Context, personsIDS []string, spouseID string) (*mongo.UpdateResult, error) {
+	personCollection := pr.client.Database(databaseName).Collection(personCollectionName)
+
+	spouseObjectID, err := primitive.ObjectIDFromHex(spouseID)
+	if err != nil {
+		return nil, err
+	}
+
+	personObjectIDS, err := convertIDStringToObjectsIDS(personsIDS)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := personCollection.UpdateMany(ctx,
+		bson.D{{"_id", bson.D{{"$in", personObjectIDS}}}},
+		bson.D{{"$addToSet", bson.D{{"spouseIds", spouseObjectID}}}},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
 	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
+		var childrenIDS []string
+		for _, children := range person.Children {
+			childrenIDS = append(childrenIDS, children.ID)
+		}
+
+		var spouses []Person
+		var err error
+		if len(childrenIDS) > 0 {
+			spouses, err = pr.getPersonsByChildrenIDS(ctx, childrenIDS)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		var spousesIds []string
+		if len(spouses) > 0 {
+			for _, currentSpouse := range spouses {
+				spouse := buildDomainPersonFromRepositoryPerson(currentSpouse)
+				person.Spouses = append(person.Spouses, &spouse)
+				spousesIds = append(spousesIds, spouse.ID)
+			}
+		}
+
 		insertedPersonObjectID, err := pr.storePerson(sessCtx, person)
 		if err != nil {
 			return nil, err
 		}
 
-		parentsIDS := []primitive.ObjectID{}
+		if len(spousesIds) > 0 {
+			if _, err := pr.addSpouseToPersons(ctx, spousesIds, insertedPersonObjectID.Hex()); err != nil {
+				return nil, err
+			}
+		}
+
+		var parentsIDS []string
 		for _, parent := range person.Parents {
-			parentObjectID, err := primitive.ObjectIDFromHex(parent.ID)
+			parentsIDS = append(parentsIDS, parent.ID)
+		}
+
+		if len(parentsIDS) == 2 {
+			result, err := pr.addSpouseToPersons(ctx, []string{parentsIDS[1]}, parentsIDS[0])
 			if err != nil {
 				return nil, err
 			}
 
-			parentsIDS = append(parentsIDS, parentObjectID)
+			if result.ModifiedCount > 0 {
+				if _, err := pr.addSpouseToPersons(ctx, []string{parentsIDS[0]}, parentsIDS[1]); err != nil {
+					return nil, err
+				}
+			}
 		}
 
-		if err := pr.addChildrenToParents(sessCtx, parentsIDS, *insertedPersonObjectID); err != nil {
-			return nil, err
+		if len(parentsIDS) > 0 {
+			if err := pr.addChildrenToParents(sessCtx, parentsIDS, insertedPersonObjectID.Hex()); err != nil {
+				return nil, err
+			}
 		}
 
 		return insertedPersonObjectID, nil
@@ -411,7 +547,7 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*do
 		return nil, errors.New("failed to convert inserted document to Object ID")
 	}
 
-	persons, err := pr.GetPersonWithImmediateRelativesByIDS(ctx, []string{insertedPersonObjectID.Hex()})
+	persons, err := pr.getPersonWithImmediateRelativesByIDS(ctx, []string{insertedPersonObjectID.Hex()})
 	if err != nil {
 		return nil, err
 	}
@@ -420,5 +556,6 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*do
 		return nil, errors.New("unable to find inserted person")
 	}
 
-	return &persons[0], nil
+	domainPersons := buildDomainPersonsFromRepositoryPersons(persons)
+	return &domainPersons[0], nil
 }

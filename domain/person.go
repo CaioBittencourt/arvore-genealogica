@@ -47,11 +47,13 @@ type FamilyGraph struct {
 	Members map[string]*Person
 }
 type Person struct {
-	ID            string
-	Name          string
-	Gender        GenderType
-	Parents       []*Person
-	Children      []*Person
+	ID       string
+	Name     string
+	Gender   GenderType
+	Parents  []*Person
+	Children []*Person
+
+	Spouses       []*Person
 	Generation    int
 	Relationships map[string]Relationship
 }
@@ -65,6 +67,14 @@ func buildRelationshipWithPerson(person Person, relationshipType RelationshipTyp
 		},
 		Relationship: relationshipType,
 	}
+}
+
+func (p Person) Validate() error {
+	if len(p.Parents) > 2 {
+		return errors.New("not allowed to have more than 2 parents")
+	}
+
+	return nil
 }
 
 func (p Person) isParent(possibleParent Person) bool {

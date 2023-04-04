@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/CaioBittencourt/arvore-genealogica/domain"
 	"github.com/CaioBittencourt/arvore-genealogica/repository"
@@ -9,6 +11,7 @@ import (
 
 type PersonController interface {
 	GetFamilyGraphByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error)
+	BaconsNumber(ctx context.Context, firstPersonID string, secondPersonID string) ([]domain.Person, *uint, error)
 	Store(ctx context.Context, person domain.Person) (*domain.Person, error)
 }
 
@@ -29,6 +32,8 @@ func (pc personController) GetFamilyGraphByPersonID(ctx context.Context, personI
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("%+v\n", familyGraph)
 
 	if err := familyGraph.PopulateWithFamilyRelationships(personID); err != nil {
 		return nil, err
@@ -65,6 +70,10 @@ func (pc personController) BaconsNumber(ctx context.Context, firstPersonID strin
 }
 
 func (pc personController) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
+	if err := person.Validate(); err != nil {
+		return nil, errors.New("invalid person to store")
+	}
+
 	// incest: parent being inserted: my father or mother are in eachothers graphs?
 	insertedPerson, err := pc.personRepository.Store(ctx, person)
 	if err != nil {

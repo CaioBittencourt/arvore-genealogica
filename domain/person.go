@@ -230,6 +230,13 @@ func (fg *FamilyGraph) PopulateWithFamilyRelationships(personID string) error {
 	for currentPerson != nil || visitPersonQueue.Len() > 0 {
 		currentPerson.Relationships = make(map[string]Relationship)
 
+		for _, currentSpouse := range currentPerson.Spouses {
+			if _, ok := personAlreadyOnQueue[currentSpouse.ID]; !ok {
+				visitPersonQueue.PushBack(currentSpouse)
+				personAlreadyOnQueue[currentSpouse.ID] = true
+			}
+		}
+
 		for _, currentParent := range currentPerson.Parents {
 			if _, ok := personAlreadyOnQueue[currentParent.ID]; !ok {
 				visitPersonQueue.PushBack(currentParent)
@@ -298,6 +305,11 @@ type PersonJumps struct {
 }
 
 func (fg *FamilyGraph) BaconsNumber(personIDA string, personIDB string) *uint {
+	if personIDA == personIDB {
+		zero := uint(0)
+		return &zero
+	}
+
 	personA, ok := fg.Members[personIDA]
 	if !ok {
 		return nil
@@ -322,16 +334,23 @@ func (fg *FamilyGraph) BaconsNumber(personIDA string, personIDB string) *uint {
 			break
 		}
 
+		for _, currentSpouse := range currentPerson.Person.Spouses {
+			if _, ok := personAlreadyOnQueue[currentSpouse.ID]; !ok {
+				visitPersonQueue.PushBack(&PersonJumps{Person: currentSpouse, JumpsUntilHere: currentPerson.JumpsUntilHere + 1})
+				personAlreadyOnQueue[currentSpouse.ID] = true
+			}
+		}
+
 		for _, currentParent := range currentPerson.Person.Parents {
 			if _, ok := personAlreadyOnQueue[currentParent.ID]; !ok {
-				visitPersonQueue.PushBack(PersonJumps{Person: currentParent, JumpsUntilHere: currentPerson.JumpsUntilHere + 1})
+				visitPersonQueue.PushBack(&PersonJumps{Person: currentParent, JumpsUntilHere: currentPerson.JumpsUntilHere + 1})
 				personAlreadyOnQueue[currentParent.ID] = true
 			}
 		}
 
 		for _, currentChildren := range currentPerson.Person.Children {
 			if _, ok := personAlreadyOnQueue[currentChildren.ID]; !ok {
-				visitPersonQueue.PushBack(PersonJumps{Person: currentChildren, JumpsUntilHere: currentPerson.JumpsUntilHere + 1})
+				visitPersonQueue.PushBack(&PersonJumps{Person: currentChildren, JumpsUntilHere: currentPerson.JumpsUntilHere + 1})
 				personAlreadyOnQueue[currentChildren.ID] = true
 			}
 		}

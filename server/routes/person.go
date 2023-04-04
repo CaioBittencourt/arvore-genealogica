@@ -9,5 +9,6 @@ import (
 func RegisterPersonRoutes(router *gin.Engine, personController controller.PersonController) {
 	router.GET("/person/:id/tree", server.GetPersonFamilyGraphHandler(personController))
 	// router.GET("/person/:id/relationship", server.GetPersonFamilyGraphHandler(personController))
+	router.GET("/person/:id/baconNumber/:personIdB", server.GetBaconsNumberBetweenTwoPersons(personController))
 	router.POST("/person", server.Store(personController))
 }

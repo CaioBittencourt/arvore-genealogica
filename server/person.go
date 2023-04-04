@@ -14,9 +14,14 @@ import (
 type StorePersonRequest struct {
 	Name        string   `json:"name"`
 	Gender      string   `json:"gender"`
-	MotherID    *string  `json:"mother_id"`
-	FatherID    *string  `json:"father_id"`
-	ChildrenIDs []string `json:"children_ids"`
+	MotherID    *string  `json:"motherId"`
+	FatherID    *string  `json:"fatherId`
+	ChildrenIDs []string `json:"childrenIds"`
+}
+
+type GetBaconsNumberBetweenTwoPersonsResponse struct {
+	Persons      []PersonResponse `json:"persons"`
+	BaconsNumber uint             `json:"baconsNumber"`
 }
 
 type PersonResponse struct {
@@ -89,6 +94,27 @@ func GetPersonFamilyGraphHandler(personController controller.PersonController) g
 		ctx.JSON(200, PersonTreeResponse{Members: buildPersonsWithRelationshipFromFamilyGraph(*familyGraph)})
 	})
 }
+
+func GetBaconsNumberBetweenTwoPersons(personController controller.PersonController) gin.HandlerFunc {
+	return gin.HandlerFunc(func(ctx *gin.Context) {
+		personAID := ctx.Param("id")
+		personBID := ctx.Param("personIdB")
+
+		persons, baconsNumber, err := personController.BaconsNumber(ctx, personAID, personBID)
+		if err != nil {
+			ctx.JSON(500, err) // fazer error handling / error matching da camada de dominio com a do http
+			return
+		}
+
+		if baconsNumber == nil {
+			ctx.JSON(404, "unable to find bacons number between this two persons")
+			return
+		}
+
+		ctx.JSON(200, GetBaconsNumberBetweenTwoPersonsResponse{Persons: buildPersonResponsesFromDomainPersons(persons), BaconsNumber: *baconsNumber})
+	})
+}
+
 func (pr StorePersonRequest) validate() error {
 	gender := domain.GenderType(pr.Gender)
 	if len(pr.Name) < 2 {
@@ -124,38 +150,50 @@ func buildPersonFromStorePersonRequest(personReq StorePersonRequest) domain.Pers
 	return person
 
 }
+func buildSimplePersonResponseFromDomainPerson(domainPerson domain.Person) PersonResponse {
+	return PersonResponse{
+		ID:       domainPerson.ID,
+		Name:     domainPerson.Name,
+		Gender:   string(domainPerson.Gender),
+		Children: []PersonResponse{},
+		Parents:  []PersonResponse{},
+	}
+}
 
 func buildPersonResponseFromDomainPerson(domainPerson domain.Person) PersonResponse {
-	personResponse := &PersonResponse{
-		ID:     domainPerson.ID,
-		Name:   domainPerson.Name,
-		Gender: string(domainPerson.Gender),
-	}
+	personResponse := buildSimplePersonResponseFromDomainPerson(domainPerson)
 
-	personResponse.Children = []PersonResponse{}
 	for _, children := range domainPerson.Children {
 		if children.Name == "" {
 			continue
 		}
 
-		domainChildren := buildPersonResponseFromDomainPerson(*children)
+		domainChildren := buildSimplePersonResponseFromDomainPerson(*children)
 		personResponse.Children = append(personResponse.Children, domainChildren)
 	}
 
-	personResponse.Parents = []PersonResponse{}
 	for _, parent := range domainPerson.Parents {
 		if parent.Name == "" {
 			continue
 		}
 
-		domainParent := buildPersonResponseFromDomainPerson(*parent)
+		domainParent := buildSimplePersonResponseFromDomainPerson(*parent)
 		personResponse.Parents = append(personResponse.Parents, domainParent)
 	}
 
-	return *personResponse
+	return personResponse
 }
 
-// TODO add tests for required fields on api
+func buildPersonResponsesFromDomainPersons(domainPersons []domain.Person) []PersonResponse {
+	var personResponses []PersonResponse
+	for _, domainPerson := range domainPersons {
+		personResponses = append(personResponses, buildPersonResponseFromDomainPerson(domainPerson))
+	}
+
+	return personResponses
+}
+
+// TODO: fix response parents and children for this endpoint
 func Store(personController controller.PersonController) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		var req StorePersonRequest

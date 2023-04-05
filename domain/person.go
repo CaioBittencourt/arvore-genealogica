@@ -169,47 +169,47 @@ func (p Person) isUncleOrAunt(possibleUncle Person) bool {
 	return false
 }
 
-func (p Person) FindNextGenerationRelationships(personToFindRelationships Person) *Relationship {
-	if p.isParent(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, ParentRelashionship)
+func (p Person) FindNextGenerationRelationships(personToFindRelationship Person) *Relationship {
+	if p.isParent(personToFindRelationship) {
+		relationship := buildRelationshipWithPerson(personToFindRelationship, ParentRelashionship)
 		return &relationship
 	}
 
-	if p.isUncleOrAunt(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, AuntUncleRelashionship)
-		return &relationship
-	}
-
-	return nil
-}
-
-func (p Person) FindPreviouseGenerationRelationships(personToFindRelationships Person) *Relationship {
-	if p.isChildren(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, ChildRelashionship)
-		return &relationship
-	}
-
-	if p.isNephew(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, NephewRelashionship)
+	if p.isUncleOrAunt(personToFindRelationship) {
+		relationship := buildRelationshipWithPerson(personToFindRelationship, AuntUncleRelashionship)
 		return &relationship
 	}
 
 	return nil
 }
 
-func (p Person) FindCurrentGenerationRelationships(personToFindRelationships Person) *Relationship {
-	if p.isSibling(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, SiblingRelashionship)
+func (p Person) FindPreviouseGenerationRelationships(personToFindRelationship Person) *Relationship {
+	if p.isChildren(personToFindRelationship) {
+		relationship := buildRelationshipWithPerson(personToFindRelationship, ChildRelashionship)
 		return &relationship
 	}
 
-	if p.isSpouse(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, SpouseRelashionship)
+	if p.isNephew(personToFindRelationship) {
+		relationship := buildRelationshipWithPerson(personToFindRelationship, NephewRelashionship)
 		return &relationship
 	}
 
-	if p.isCousin(personToFindRelationships) {
-		relationship := buildRelationshipWithPerson(personToFindRelationships, CousinRelashionship)
+	return nil
+}
+
+func (p Person) FindCurrentGenerationRelationships(personToFindRelationship Person) *Relationship {
+	if p.isSibling(personToFindRelationship) {
+		relationship := buildRelationshipWithPerson(personToFindRelationship, SiblingRelashionship)
+		return &relationship
+	}
+
+	if p.isSpouse(personToFindRelationship) {
+		relationship := buildRelationshipWithPerson(personToFindRelationship, SpouseRelashionship)
+		return &relationship
+	}
+
+	if p.isCousin(personToFindRelationship) {
+		relationship := buildRelationshipWithPerson(personToFindRelationship, CousinRelashionship)
 		return &relationship
 	}
 

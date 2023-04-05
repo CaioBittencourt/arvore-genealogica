@@ -25,7 +25,9 @@ func buildFamilyGraph() FamilyGraph {
 
 	luis.Children = []*Person{caio, vivian}
 	luis.Parents = []*Person{zeze}
+	luis.Spouses = []*Person{dayse}
 
+	dayse.Spouses = []*Person{luis}
 	dayse.Children = []*Person{caio, vivian}
 
 	caio.Parents = []*Person{dayse, luis}
@@ -123,6 +125,85 @@ func TestBuildFamilyRelationships(t *testing.T) {
 							tt.familyGraph.Members[personID].Relationships[expectedRelationship.Person.ID].Relationship,
 						)
 					}
+				}
+			}
+		}(tt))
+	}
+}
+
+func TestBaconsNumber(t *testing.T) {
+	type baconsNumberArgs struct {
+		personIDA string
+		personIDB string
+	}
+
+	type testArgs struct {
+		testName             string
+		familyGraph          FamilyGraph
+		baconsNumberArgs     baconsNumberArgs
+		expectedBaconsNumber *uint
+	}
+
+	familyGraph := buildFamilyGraph()
+	tests := []testArgs{
+		{
+			testName:             "should return nil bacon number if person A is not found on the family graph",
+			familyGraph:          familyGraph,
+			baconsNumberArgs:     baconsNumberArgs{personIDA: "unexistingID", personIDB: "IDLuis"},
+			expectedBaconsNumber: nil,
+		},
+		{
+			testName:             "should return nil bacon number if person B is not found on the family graph",
+			familyGraph:          familyGraph,
+			baconsNumberArgs:     baconsNumberArgs{personIDA: "IDLuis", personIDB: "unexistingID"},
+			expectedBaconsNumber: nil,
+		},
+		{
+			testName:         "should return correct bacons number between uncle / nephew",
+			familyGraph:      familyGraph,
+			baconsNumberArgs: baconsNumberArgs{personIDA: "IDLuis", personIDB: "IDLivia"},
+			expectedBaconsNumber: func() *uint {
+				baconsNumber := uint(3)
+				return &baconsNumber
+			}(),
+		},
+		{
+			testName:         "should return correct bacons number for grandparents",
+			familyGraph:      familyGraph,
+			baconsNumberArgs: baconsNumberArgs{personIDA: "IDCaio", personIDB: "IDZézé"},
+			expectedBaconsNumber: func() *uint {
+				baconsNumber := uint(2)
+				return &baconsNumber
+			}(),
+		},
+		{
+			testName:         "should return correct bacons number for cousins",
+			familyGraph:      familyGraph,
+			baconsNumberArgs: baconsNumberArgs{personIDA: "IDCaio", personIDB: "IDLivia"},
+			expectedBaconsNumber: func() *uint {
+				baconsNumber := uint(4)
+				return &baconsNumber
+			}(),
+		},
+		{
+			testName:         "should return correct bacons number for spouses",
+			familyGraph:      familyGraph,
+			baconsNumberArgs: baconsNumberArgs{personIDA: "IDDayse", personIDB: "IDLuis"},
+			expectedBaconsNumber: func() *uint {
+				baconsNumber := uint(1)
+				return &baconsNumber
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(tt testArgs) func(t *testing.T) {
+			return func(t *testing.T) {
+				baconsNumber := tt.familyGraph.BaconsNumber(tt.baconsNumberArgs.personIDA, tt.baconsNumberArgs.personIDB)
+				if tt.expectedBaconsNumber == nil {
+					assert.Equal(t, tt.expectedBaconsNumber, baconsNumber)
+				} else {
+					assert.Equal(t, *tt.expectedBaconsNumber, *baconsNumber)
 				}
 			}
 		}(tt))

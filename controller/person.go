@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/CaioBittencourt/arvore-genealogica/domain"
 	"github.com/CaioBittencourt/arvore-genealogica/repository"
@@ -32,8 +31,6 @@ func (pc personController) GetFamilyGraphByPersonID(ctx context.Context, personI
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("%+v\n", familyGraph)
 
 	if err := familyGraph.PopulateWithFamilyRelationships(personID); err != nil {
 		return nil, err

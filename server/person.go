@@ -19,17 +19,32 @@ type StorePersonRequest struct {
 	ChildrenIDs []string `json:"childrenIds"`
 }
 
+type ErrorResponse struct {
+	ErrorMessage string `json:"errorMessage"`
+	ErrorCode    string `json:"errorCode"`
+}
+
+func (er ErrorResponse) Error() string {
+	return er.ErrorMessage
+}
+
 type GetBaconsNumberBetweenTwoPersonsResponse struct {
 	Persons      []PersonResponse `json:"persons"`
 	BaconsNumber uint             `json:"baconsNumber"`
 }
 
+type PersonRelativesResponse struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Gender string `json:"gender"`
+}
 type PersonResponse struct {
-	ID       string           `json:"id"`
-	Name     string           `json:"name"`
-	Gender   string           `json:"gender"`
-	Parents  []PersonResponse `json:"parents"`
-	Children []PersonResponse `json:"children"`
+	ID       string                    `json:"id"`
+	Name     string                    `json:"name"`
+	Gender   string                    `json:"gender"`
+	Parents  []PersonRelativesResponse `json:"parents"`
+	Children []PersonRelativesResponse `json:"children"`
+	Spouses  []PersonRelativesResponse `json:"spouses"`
 }
 
 type RelationshipPerson struct {
@@ -62,6 +77,7 @@ func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph)
 			},
 		}
 
+		personWithRelationship.Relationships = []Relationship{}
 		for _, relationship := range member.Relationships {
 			personWithRelationship.Relationships = append(
 				personWithRelationship.Relationships,
@@ -81,17 +97,17 @@ func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph)
 	return personsWithRelationship
 }
 
-func GetPersonFamilyGraphHandler(personController controller.PersonController) gin.HandlerFunc {
+func GetPersonFamilyRelationships(personController controller.PersonController) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personID := ctx.Param("id")
 
 		familyGraph, err := personController.GetFamilyGraphByPersonID(ctx, personID)
 		if err != nil {
-			ctx.JSON(500, err) // fazer error handling / error matching da camada de dominio com a do http
+			ctx.JSON(http.StatusInternalServerError, ErrorResponse{ErrorMessage: err.Error()})
 			return
 		}
 
-		ctx.JSON(200, PersonTreeResponse{Members: buildPersonsWithRelationshipFromFamilyGraph(*familyGraph)})
+		ctx.JSON(http.StatusOK, PersonTreeResponse{Members: buildPersonsWithRelationshipFromFamilyGraph(*familyGraph)})
 	})
 }
 
@@ -102,7 +118,7 @@ func GetBaconsNumberBetweenTwoPersons(personController controller.PersonControll
 
 		persons, baconsNumber, err := personController.BaconsNumber(ctx, personAID, personBID)
 		if err != nil {
-			ctx.JSON(500, err) // fazer error handling / error matching da camada de dominio com a do http
+			ctx.JSON(http.StatusInternalServerError, err) // fazer error handling / error matching da camada de dominio com a do http
 			return
 		}
 
@@ -111,14 +127,14 @@ func GetBaconsNumberBetweenTwoPersons(personController controller.PersonControll
 			return
 		}
 
-		ctx.JSON(200, GetBaconsNumberBetweenTwoPersonsResponse{Persons: buildPersonResponsesFromDomainPersons(persons), BaconsNumber: *baconsNumber})
+		ctx.JSON(http.StatusOK, GetBaconsNumberBetweenTwoPersonsResponse{Persons: buildPersonResponsesFromDomainPersons(persons), BaconsNumber: *baconsNumber})
 	})
 }
 
 func (pr StorePersonRequest) validate() error {
 	gender := domain.GenderType(pr.Gender)
 	if len(pr.Name) < 2 {
-		return errors.New("name must have more than 1 character")
+		return ErrorResponse{ErrorMessage: "name must have more than 1 character"}
 	}
 
 	if !gender.IsValid() {
@@ -150,25 +166,30 @@ func buildPersonFromStorePersonRequest(personReq StorePersonRequest) domain.Pers
 	return person
 
 }
-func buildSimplePersonResponseFromDomainPerson(domainPerson domain.Person) PersonResponse {
-	return PersonResponse{
-		ID:       domainPerson.ID,
-		Name:     domainPerson.Name,
-		Gender:   string(domainPerson.Gender),
-		Children: []PersonResponse{},
-		Parents:  []PersonResponse{},
+func buildPersonRelativesResponseFromDomainPerson(domainPerson domain.Person) PersonRelativesResponse {
+	return PersonRelativesResponse{
+		ID:     domainPerson.ID,
+		Name:   domainPerson.Name,
+		Gender: string(domainPerson.Gender),
 	}
 }
 
 func buildPersonResponseFromDomainPerson(domainPerson domain.Person) PersonResponse {
-	personResponse := buildSimplePersonResponseFromDomainPerson(domainPerson)
+	personResponse := PersonResponse{
+		ID:       domainPerson.ID,
+		Name:     domainPerson.Name,
+		Gender:   string(domainPerson.Gender),
+		Children: []PersonRelativesResponse{},
+		Parents:  []PersonRelativesResponse{},
+		Spouses:  []PersonRelativesResponse{},
+	}
 
 	for _, children := range domainPerson.Children {
 		if children.Name == "" {
 			continue
 		}
 
-		domainChildren := buildSimplePersonResponseFromDomainPerson(*children)
+		domainChildren := buildPersonRelativesResponseFromDomainPerson(*children)
 		personResponse.Children = append(personResponse.Children, domainChildren)
 	}
 
@@ -177,8 +198,17 @@ func buildPersonResponseFromDomainPerson(domainPerson domain.Person) PersonRespo
 			continue
 		}
 
-		domainParent := buildSimplePersonResponseFromDomainPerson(*parent)
+		domainParent := buildPersonRelativesResponseFromDomainPerson(*parent)
 		personResponse.Parents = append(personResponse.Parents, domainParent)
+	}
+
+	for _, spouse := range domainPerson.Spouses {
+		if spouse.Name == "" {
+			continue
+		}
+
+		domainSpouse := buildPersonRelativesResponseFromDomainPerson(*spouse)
+		personResponse.Spouses = append(personResponse.Spouses, domainSpouse)
 	}
 
 	return personResponse
@@ -199,26 +229,29 @@ func Store(personController controller.PersonController) gin.HandlerFunc {
 		var req StorePersonRequest
 
 		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
+			ctx.JSON(http.StatusBadRequest, ErrorResponse{
+				ErrorMessage: err.Error(),
 			})
+			return
 		}
 
 		if err := req.validate(); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
+			ctx.JSON(http.StatusBadRequest, ErrorResponse{
+				ErrorMessage: err.Error(),
 			})
+			return
 		}
 
 		personToStore := buildPersonFromStorePersonRequest(req)
 		person, err := personController.Store(ctx, personToStore)
 		if err != nil {
 			log.WithError(err).Error("error saving person")
-			ctx.JSON(500, "failed to store person")
+			ctx.JSON(http.StatusInternalServerError, ErrorResponse{
+				ErrorMessage: "failed to store person",
+			})
 			return
 		}
 
-		//TODO: Add request validation
-		ctx.JSON(200, buildPersonResponseFromDomainPerson(*person))
+		ctx.JSON(http.StatusOK, buildPersonResponseFromDomainPerson(*person))
 	})
 }

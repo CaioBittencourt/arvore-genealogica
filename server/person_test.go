@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 }
 
 func teardownTest() {
-	mongoClient.Database(os.Getenv("MONGO_DATABASE")).Drop(context.Background())
+	mongoClient.Database(os.Getenv("MONGO_DATABASE")).Collection("person").Drop(context.Background())
 }
 
 // Equalize IDS so i can use assert.Equal. The id cannot be a request argument since its an mongodb object ID
@@ -126,15 +126,6 @@ func buildFamily(router *gin.Engine, personInsertedIdByName map[string]string) e
 	}
 	tunicoID := personInsertedIdByName["Tunico"]
 
-	if err := storePerson(router, server.StorePersonRequest{Name: "Claudia", Gender: "female", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
-		return err
-	}
-	claudiaID := personInsertedIdByName["Claudia"]
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Livia", Gender: "female", MotherID: &claudiaID}, personInsertedIdByName); err != nil {
-		return err
-	}
-
 	if err := storePerson(router, server.StorePersonRequest{Name: "Luis", Gender: "male", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
 		return err
 	}
@@ -146,6 +137,15 @@ func buildFamily(router *gin.Engine, personInsertedIdByName map[string]string) e
 	dayseID := personInsertedIdByName["Dayse"]
 
 	if err := storePerson(router, server.StorePersonRequest{Name: "Caio", Gender: "male", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
+		return err
+	}
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Claudia", Gender: "female", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
+		return err
+	}
+	claudiaID := personInsertedIdByName["Claudia"]
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Livia", Gender: "female", MotherID: &claudiaID}, personInsertedIdByName); err != nil {
 		return err
 	}
 
@@ -315,88 +315,88 @@ func TestStore(t *testing.T) {
 	teardownTest()
 }
 
-// func TestGetPersonFamilyGraphHandler(t *testing.T) {
-// 	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
-// 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
-// 	personController := controller.NewPersonController(personRepository)
-// 	router := routes.SetupRouter(personController)
+func TestGetPersonFamilyGraphHandler(t *testing.T) {
+	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
+	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
+	personController := controller.NewPersonController(personRepository)
+	router := routes.SetupRouter(personController)
 
-// 	type testArgs struct {
-// 		testName              string
-// 		buildFamilyTreeFunc   func() error
-// 		personToSearchName    string
-// 		expectedStatusCode    int
-// 		expectedResponse      *server.PersonTreeResponse
-// 		expectedErrorResponse *server.ErrorResponse
-// 	}
+	type testArgs struct {
+		testName              string
+		buildFamilyTreeFunc   func() error
+		personToSearchName    string
+		expectedStatusCode    int
+		expectedResponse      *server.PersonTreeResponse
+		expectedErrorResponse *server.ErrorResponse
+	}
 
-// 	personInsertedIdByName := map[string]string{}
-// 	tests := []testArgs{
-// 		// do failures tests.
-// 		// {
-// 		// 	testName: "should return tree when there is just one node",
-// 		// 	buildFamilyTreeFunc: func() error {
-// 		// 		if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, personInsertedIdByName); err != nil {
-// 		// 			return err
-// 		// 		}
-// 		// 		return nil
-// 		// 	},
-// 		// 	personToSearchName: "Loner",
-// 		// 	expectedStatusCode: 200,
-// 		// 	expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
-// 		// 		{
-// 		// 			RelationshipPerson: server.RelationshipPerson{
-// 		// 				Name:   "Loner",
-// 		// 				Gender: "male",
-// 		// 			},
-// 		// 			Relationships: []server.Relationship{}},
-// 		// 	}},
-// 		// },
-// 		{
-// 			testName: "should return tree relationships: nephew, aunt, cousin, spouse, parent, children, sibling",
-// 			buildFamilyTreeFunc: func() error {
-// 				if err := buildFamily(router, personInsertedIdByName); err != nil {
-// 					return err
-// 				}
-// 				return nil
-// 			},
-// 			personToSearchName: "Caio",
-// 			expectedStatusCode: 200,
-// 			expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
-// 				{
-// 					RelationshipPerson: server.RelationshipPerson{
-// 						Name:   "Loner",
-// 						Gender: "male",
-// 					},
-// 					Relationships: []server.Relationship{}},
-// 			}},
-// 		},
-// 	}
+	personInsertedIdByName := map[string]string{}
+	tests := []testArgs{
+		// do failures tests.
+		// {
+		// 	testName: "should return tree when there is just one node",
+		// 	buildFamilyTreeFunc: func() error {
+		// 		if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, personInsertedIdByName); err != nil {
+		// 			return err
+		// 		}
+		// 		return nil
+		// 	},
+		// 	personToSearchName: "Loner",
+		// 	expectedStatusCode: 200,
+		// 	expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
+		// 		{
+		// 			RelationshipPerson: server.RelationshipPerson{
+		// 				Name:   "Loner",
+		// 				Gender: "male",
+		// 			},
+		// 			Relationships: []server.Relationship{}},
+		// 	}},
+		// },
+		{
+			testName: "should return tree relationships: nephew, aunt, cousin, spouse, parent, children, sibling",
+			buildFamilyTreeFunc: func() error {
+				if err := buildFamily(router, personInsertedIdByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personToSearchName: "Caio",
+			expectedStatusCode: 200,
+			expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
+				{
+					RelationshipPerson: server.RelationshipPerson{
+						Name:   "Loner",
+						Gender: "male",
+					},
+					Relationships: []server.Relationship{}},
+			}},
+		},
+	}
 
-// 	for _, tt := range tests {
-// 		t.Run(tt.testName, func(tt testArgs) func(t *testing.T) {
-// 			return func(t *testing.T) {
-// 				if err := tt.buildFamilyTreeFunc(); err != nil {
-// 					t.Errorf("failed to build family tree: %s", err.Error())
-// 				}
+	for _, tt := range tests {
+		t.Run(tt.testName, func(tt testArgs) func(t *testing.T) {
+			return func(t *testing.T) {
+				if err := tt.buildFamilyTreeFunc(); err != nil {
+					t.Errorf("failed to build family tree: %s", err.Error())
+				}
 
-// 				successRes, errorRes, statusCode, err := doGetPersonFamilyRelationshipsRequest(router, personInsertedIdByName[tt.personToSearchName])
-// 				if err != nil {
-// 					t.Error(err)
-// 				}
+				successRes, errorRes, statusCode, err := doGetPersonFamilyRelationshipsRequest(router, personInsertedIdByName[tt.personToSearchName])
+				if err != nil {
+					t.Error(err)
+				}
 
-// 				assert.Equal(t, tt.expectedStatusCode, statusCode)
+				assert.Equal(t, tt.expectedStatusCode, statusCode)
 
-// 				if tt.expectedErrorResponse != nil {
-// 					assert.Equal(t, tt.expectedErrorResponse, errorRes)
-// 				}
+				if tt.expectedErrorResponse != nil {
+					assert.Equal(t, tt.expectedErrorResponse, errorRes)
+				}
 
-// 				if tt.expectedResponse != nil {
-// 					addPersonIDToExpectedPersonTreeResponse(tt.expectedResponse.Members, personInsertedIdByName)
-// 					assert.Equal(t, tt.expectedResponse, successRes)
-// 				}
-// 				teardownTest()
-// 			}
-// 		}(tt))
-// 	}
-// }
+				if tt.expectedResponse != nil {
+					addPersonIDToExpectedPersonTreeResponse(tt.expectedResponse.Members, personInsertedIdByName)
+					assert.Equal(t, tt.expectedResponse, successRes)
+				}
+				teardownTest()
+			}
+		}(tt))
+	}
+}

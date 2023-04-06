@@ -46,6 +46,46 @@ func NewPersonRepository(client mongo.Client, databaseName string) PersonReposit
 	return PersonRepository{client: client, databaseName: databaseName}
 }
 
+func buildRepositoryPersonFromDomainPerson(domainPerson domain.Person) Person {
+	repositoryPerson := Person{
+		Name:        domainPerson.Name,
+		Gender:      string(domainPerson.Gender),
+		ChildrenIDS: []primitive.ObjectID{},
+		SpouseIDS:   []primitive.ObjectID{},
+		ParentIDS:   []primitive.ObjectID{},
+	}
+
+	if domainPerson.ID != "" {
+		objectID, err := primitive.ObjectIDFromHex(domainPerson.ID)
+		if err == nil {
+			repositoryPerson.ID = objectID
+		}
+	}
+
+	for _, parent := range domainPerson.Parents {
+		objectID, err := primitive.ObjectIDFromHex(parent.ID)
+		if err == nil {
+			repositoryPerson.ParentIDS = append(repositoryPerson.ParentIDS, objectID)
+		}
+	}
+
+	for _, children := range domainPerson.Children {
+		objectID, err := primitive.ObjectIDFromHex(children.ID)
+		if err == nil {
+			repositoryPerson.ChildrenIDS = append(repositoryPerson.ChildrenIDS, objectID)
+		}
+	}
+
+	for _, spouse := range domainPerson.Spouses {
+		objectID, err := primitive.ObjectIDFromHex(spouse.ID)
+		if err == nil {
+			repositoryPerson.SpouseIDS = append(repositoryPerson.SpouseIDS, objectID)
+		}
+	}
+
+	return repositoryPerson
+}
+
 func buildDomainPersonFromRepositoryPerson(personRepository Person) domain.Person {
 	person := domain.Person{
 		ID:     personRepository.ID.Hex(),
@@ -335,67 +375,37 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 	return &familyGraph, nil
 }
 
-func (pr PersonRepository) addChildrenToParents(ctx context.Context, parentIDS []string, childrenID string) error {
+func (pr PersonRepository) addChildrenToParents(ctx context.Context, parentsObjectIDS []primitive.ObjectID, childrenObjectID primitive.ObjectID) error {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
-	childrenObjectID, err := primitive.ObjectIDFromHex(childrenID)
-	if err != nil {
-		return err
-	}
-
-	parentsObjectIDS, err := convertIDStringToObjectsIDS(parentIDS)
-	if err != nil {
-		return err
-	}
-
-	if _, err := personCollection.UpdateMany(ctx,
-		bson.D{{"_id", bson.D{{"$in", parentsObjectIDS}}}},
-		bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
-	); err != nil {
-		return err
+	if len(parentsObjectIDS) > 1 {
+		if _, err := personCollection.UpdateMany(ctx,
+			bson.D{{"_id", bson.D{{"$in", parentsObjectIDS}}}},
+			bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
+		); err != nil {
+			return err
+		}
+	} else {
+		if _, err := personCollection.UpdateOne(ctx,
+			bson.D{{"_id", parentsObjectIDS[0]}},
+			bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
+		); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (pr PersonRepository) storePerson(ctx context.Context, person domain.Person) (*primitive.ObjectID, error) {
+func (pr PersonRepository) storePerson(ctx context.Context, person Person) (*primitive.ObjectID, error) {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
-
-	childrenIDs := make([]primitive.ObjectID, len(person.Children))
-	for _, children := range person.Children {
-		childrenObjectId, err := primitive.ObjectIDFromHex(children.ID)
-		if err != nil {
-			return nil, err
-		}
-		childrenIDs = append(childrenIDs, childrenObjectId)
-	}
-
-	parentIDS := []primitive.ObjectID{}
-	for _, parent := range person.Parents {
-		parentObjectID, err := primitive.ObjectIDFromHex(parent.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		parentIDS = append(parentIDS, parentObjectID)
-	}
-
-	spouseIDS := []primitive.ObjectID{}
-	for _, spouse := range person.Spouses {
-		spouseObjectID, err := primitive.ObjectIDFromHex(spouse.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		spouseIDS = append(spouseIDS, spouseObjectID)
-	}
 
 	insertedPerson, err := personCollection.InsertOne(ctx, bson.D{
 		{"name", person.Name},
 		{"gender", person.Gender},
-		{"parentIds", parentIDS},
-		{"childrenIds", childrenIDs},
-		{"spouseIds", spouseIDS},
+		{"parentIds", person.ParentIDS},
+		{"childrenIds", person.ChildrenIDS},
+		{"spouseIds", person.SpouseIDS},
 	})
 	if err != nil {
 		return nil, err
@@ -486,13 +496,8 @@ func (pr PersonRepository) getPersonsByIDS(ctx context.Context, IDS []string) ([
 	return persons, nil
 }
 
-func (pr PersonRepository) getPersonsByChildrenIDS(ctx context.Context, IDS []string) ([]Person, error) {
+func (pr PersonRepository) getPersonsByChildrenIDS(ctx context.Context, objectIDS []primitive.ObjectID) ([]Person, error) {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
-
-	objectIDS, err := convertIDStringToObjectsIDS(IDS)
-	if err != nil {
-		return nil, err
-	}
 
 	cursor, err := personCollection.Find(ctx, bson.D{{"childrenIds", bson.D{{"$in", objectIDS}}}})
 	if err != nil {
@@ -510,23 +515,22 @@ func (pr PersonRepository) getPersonsByChildrenIDS(ctx context.Context, IDS []st
 	return persons, nil
 }
 
-func (pr PersonRepository) addSpouseToPersons(ctx context.Context, personsIDS []string, spouseID string) (*mongo.UpdateResult, error) {
+func (pr PersonRepository) addSpouseToPersons(ctx context.Context, personObjectIDS []primitive.ObjectID, spouseObjectID primitive.ObjectID) (*mongo.UpdateResult, error) {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
-	spouseObjectID, err := primitive.ObjectIDFromHex(spouseID)
-	if err != nil {
-		return nil, err
+	var result *mongo.UpdateResult
+	var err error
+	if len(personObjectIDS) == 1 {
+		result, err = personCollection.UpdateOne(ctx,
+			bson.D{{"_id", personObjectIDS[0]}},
+			bson.D{{"$addToSet", bson.D{{"spouseIds", spouseObjectID}}}},
+		)
+	} else {
+		result, err = personCollection.UpdateMany(ctx,
+			bson.D{{"_id", bson.D{{"$in", personObjectIDS}}}},
+			bson.D{{"$addToSet", bson.D{{"spouseIds", spouseObjectID}}}},
+		)
 	}
-
-	personObjectIDS, err := convertIDStringToObjectsIDS(personsIDS)
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := personCollection.UpdateMany(ctx,
-		bson.D{{"_id", bson.D{{"$in", personObjectIDS}}}},
-		bson.D{{"$addToSet", bson.D{{"spouseIds", spouseObjectID}}}},
-	)
 
 	if err != nil {
 		return nil, err
@@ -535,7 +539,7 @@ func (pr PersonRepository) addSpouseToPersons(ctx context.Context, personsIDS []
 	return result, nil
 }
 
-func (pr PersonRepository) updateSpousesForInsertedPerson(ctx context.Context, insertedPersonID string, spousesIds []string, insertedPersonParentsIDS []string) error {
+func (pr PersonRepository) updateSpousesForInsertedPerson(ctx context.Context, insertedPersonID primitive.ObjectID, spousesIds []primitive.ObjectID, insertedPersonParentsIDS []primitive.ObjectID) error {
 	if len(spousesIds) > 0 {
 		if _, err := pr.addSpouseToPersons(ctx, spousesIds, insertedPersonID); err != nil {
 			return err
@@ -543,13 +547,13 @@ func (pr PersonRepository) updateSpousesForInsertedPerson(ctx context.Context, i
 	}
 
 	if len(insertedPersonParentsIDS) == 2 {
-		result, err := pr.addSpouseToPersons(ctx, []string{insertedPersonParentsIDS[0]}, insertedPersonParentsIDS[1])
+		result, err := pr.addSpouseToPersons(ctx, []primitive.ObjectID{insertedPersonParentsIDS[0]}, insertedPersonParentsIDS[1])
 		if err != nil {
 			return err
 		}
 
 		if result.ModifiedCount > 0 {
-			if _, err := pr.addSpouseToPersons(ctx, []string{insertedPersonParentsIDS[1]}, insertedPersonParentsIDS[0]); err != nil {
+			if _, err := pr.addSpouseToPersons(ctx, []primitive.ObjectID{insertedPersonParentsIDS[1]}, insertedPersonParentsIDS[0]); err != nil {
 				return err
 			}
 		}
@@ -559,47 +563,37 @@ func (pr PersonRepository) updateSpousesForInsertedPerson(ctx context.Context, i
 }
 
 func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
-	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
-		var childrenIDS []string
-		for _, children := range person.Children {
-			childrenIDS = append(childrenIDS, children.ID)
-		}
+	repositoryPerson := buildRepositoryPersonFromDomainPerson(person)
 
-		var spouses []Person
-		var err error
-		if len(childrenIDS) > 0 {
-			spouses, err = pr.getPersonsByChildrenIDS(ctx, childrenIDS)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		var spousesIds []string
-		if len(spouses) > 0 {
-			for _, currentSpouse := range spouses {
-				spouse := buildDomainPersonFromRepositoryPerson(currentSpouse)
-				person.Spouses = append(person.Spouses, &spouse)
-				spousesIds = append(spousesIds, spouse.ID)
-			}
-		}
-
-		insertedPersonObjectID, err := pr.storePerson(sessCtx, person)
+	var spouses []Person
+	var err error
+	if len(repositoryPerson.ChildrenIDS) > 0 {
+		spouses, err = pr.getPersonsByChildrenIDS(ctx, repositoryPerson.ChildrenIDS)
 		if err != nil {
 			return nil, err
 		}
 
-		var parentsIDS []string
-		for _, parent := range person.Parents {
-			parentsIDS = append(parentsIDS, parent.ID)
+	}
+
+	if len(spouses) > 0 {
+		for _, currentSpouse := range spouses {
+			repositoryPerson.SpouseIDS = append(repositoryPerson.SpouseIDS, currentSpouse.ID)
+		}
+	}
+
+	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
+		insertedPersonObjectID, err := pr.storePerson(sessCtx, repositoryPerson)
+		if err != nil {
+			return nil, err
 		}
 
-		if len(parentsIDS) > 0 {
-			if err := pr.addChildrenToParents(sessCtx, parentsIDS, insertedPersonObjectID.Hex()); err != nil {
+		if len(repositoryPerson.ParentIDS) > 0 {
+			if err := pr.addChildrenToParents(sessCtx, repositoryPerson.ParentIDS, *insertedPersonObjectID); err != nil {
 				return nil, err
 			}
 		}
 
-		if err := pr.updateSpousesForInsertedPerson(ctx, insertedPersonObjectID.Hex(), spousesIds, parentsIDS); err != nil {
+		if err := pr.updateSpousesForInsertedPerson(ctx, *insertedPersonObjectID, repositoryPerson.SpouseIDS, repositoryPerson.ParentIDS); err != nil {
 			return nil, err
 		}
 

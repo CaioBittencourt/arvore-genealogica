@@ -19,8 +19,7 @@ type StorePersonRequest struct {
 }
 
 type GetBaconsNumberBetweenTwoPersonsResponse struct {
-	Persons      []PersonResponse `json:"persons"`
-	BaconsNumber uint             `json:"baconsNumber"`
+	BaconsNumber uint `json:"baconsNumber"`
 }
 
 type PersonRelativesResponse struct {
@@ -109,20 +108,15 @@ func GetPersonFamilyRelationships(personController controller.PersonController) 
 func GetBaconsNumberBetweenTwoPersons(personController controller.PersonController) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personAID := ctx.Param("id")
-		personBID := ctx.Param("personIdB")
+		personBID := ctx.Param("id2")
 
-		persons, baconsNumber, err := personController.BaconsNumber(ctx, personAID, personBID)
+		baconsNumber, err := personController.BaconsNumber(ctx, personAID, personBID)
 		if err != nil {
 			createServerResponseFromError(ctx, err)
 			return
 		}
 
-		if baconsNumber == nil {
-			createServerResponseFromError(ctx, err)
-			return
-		}
-
-		ctx.JSON(http.StatusOK, GetBaconsNumberBetweenTwoPersonsResponse{Persons: buildPersonResponsesFromDomainPersons(persons), BaconsNumber: *baconsNumber})
+		ctx.JSON(http.StatusOK, GetBaconsNumberBetweenTwoPersonsResponse{BaconsNumber: *baconsNumber})
 	})
 }
 

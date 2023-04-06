@@ -12,7 +12,7 @@ import (
 
 type PersonController interface {
 	GetFamilyGraphByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error)
-	BaconsNumber(ctx context.Context, firstPersonID string, secondPersonID string) ([]domain.Person, *uint, error)
+	BaconsNumber(ctx context.Context, firstPersonID string, secondPersonID string) (*uint, error)
 	Store(ctx context.Context, person domain.Person) (*domain.Person, error)
 }
 
@@ -47,41 +47,38 @@ func (pc personController) GetFamilyGraphByPersonID(ctx context.Context, personI
 	return familyGraph, err
 }
 
-func (pc personController) BaconsNumber(ctx context.Context, firstPersonID string, secondPersonID string) ([]domain.Person, *uint, error) {
-	var baconsNumber *uint
-
+func (pc personController) getBaconNumber(ctx context.Context, firstPersonID string, secondPersonID string) (*uint, error) {
 	familyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, firstPersonID, nil)
 	if err != nil {
 		log.WithError(err).Error("person: failed to get family graph by ID")
-		return nil, nil, err
+		return nil, err
 	}
 
 	if familyGraph == nil {
-		return nil, nil, errors.NewApplicationError(fmt.Sprintf("person with id %s not found", firstPersonID), errors.PersonNotFoundErrorCode)
+		return nil, errors.NewApplicationError(fmt.Sprintf("person with id %s not found", firstPersonID), errors.PersonNotFoundErrorCode)
 	}
 
-	baconsNumber = familyGraph.BaconsNumber(firstPersonID, secondPersonID)
-	if baconsNumber != nil {
-		return []domain.Person{*familyGraph.Members[firstPersonID], *familyGraph.Members[secondPersonID]}, baconsNumber, nil
-	}
-
-	// NOTE: the graphs are different, i have to search in both graphs in case the first one doesnt have both members!
-	secondFamilyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, secondPersonID, nil)
-	if err != nil {
-		log.WithError(err).Error("person: failed to get family graph by ID")
-		return nil, nil, err
-	}
-
-	if familyGraph == nil {
-		return nil, nil, errors.NewApplicationError(fmt.Sprintf("person with id %s not found", secondPersonID), errors.PersonNotFoundErrorCode)
-	}
-
-	baconsNumber = secondFamilyGraph.BaconsNumber(firstPersonID, secondPersonID)
+	baconsNumber := familyGraph.BaconsNumber(firstPersonID, secondPersonID)
 	if baconsNumber == nil {
-		return nil, nil, errors.NewApplicationError("persons dont belong to eachothers graph", errors.PersonNotFoundInGraph)
+		return nil, errors.NewApplicationError("persons dont belong to eachothers graph", errors.PersonNotFoundInGraph)
 	}
 
-	return []domain.Person{*secondFamilyGraph.Members[firstPersonID], *secondFamilyGraph.Members[secondPersonID]}, baconsNumber, nil
+	return baconsNumber, nil
+}
+
+func (pc personController) BaconsNumber(ctx context.Context, firstPersonID string, secondPersonID string) (*uint, error) {
+	baconNumber, err := pc.getBaconNumber(ctx, firstPersonID, secondPersonID)
+	if err != nil && !errors.ErrorHasCode(err, errors.PersonNotFoundInGraph) {
+		return nil, err
+	}
+
+	if baconNumber != nil {
+		return baconNumber, err
+	}
+
+	baconNumber, err = pc.getBaconNumber(ctx, secondPersonID, firstPersonID)
+	return baconNumber, err
+
 }
 
 func (pc personController) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {

@@ -375,14 +375,32 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 	return &familyGraph, nil
 }
 
-func (pr PersonRepository) addChildrenToParents(ctx context.Context, parentsObjectIDS []primitive.ObjectID, childrenObjectID primitive.ObjectID) error {
+func (pr PersonRepository) updateParentsForInsertedPerson(ctx context.Context, parentsObjectIDS []primitive.ObjectID, childrenObjectID primitive.ObjectID) error {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
-	if len(parentsObjectIDS) > 1 {
-		if _, err := personCollection.UpdateMany(ctx,
-			bson.D{{"_id", bson.D{{"$in", parentsObjectIDS}}}},
-			bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
-		); err != nil {
+	if len(parentsObjectIDS) > 2 {
+		return errors.New("children cant have more than 2 parents")
+	}
+
+	if len(parentsObjectIDS) == 2 {
+		var operations []mongo.WriteModel
+		for i, parentObjectID := range parentsObjectIDS {
+			var mySpouse primitive.ObjectID
+			if i == 0 {
+				mySpouse = parentsObjectIDS[i+1]
+			} else {
+				mySpouse = parentsObjectIDS[i-1]
+			}
+
+			operation := mongo.NewUpdateOneModel()
+			operation.SetFilter(bson.M{"_id": parentObjectID})
+			operation.SetUpdate(bson.M{"$addToSet": bson.M{"childrenIds": childrenObjectID, "spouseIds": mySpouse}})
+
+			operations = append(operations, operation)
+		}
+
+		_, err := personCollection.BulkWrite(ctx, operations)
+		if err != nil {
 			return err
 		}
 	} else {
@@ -539,29 +557,6 @@ func (pr PersonRepository) addSpouseToPersons(ctx context.Context, personObjectI
 	return result, nil
 }
 
-func (pr PersonRepository) updateSpousesForInsertedPerson(ctx context.Context, insertedPersonID primitive.ObjectID, spousesIds []primitive.ObjectID, insertedPersonParentsIDS []primitive.ObjectID) error {
-	if len(spousesIds) > 0 {
-		if _, err := pr.addSpouseToPersons(ctx, spousesIds, insertedPersonID); err != nil {
-			return err
-		}
-	}
-
-	if len(insertedPersonParentsIDS) == 2 {
-		result, err := pr.addSpouseToPersons(ctx, []primitive.ObjectID{insertedPersonParentsIDS[0]}, insertedPersonParentsIDS[1])
-		if err != nil {
-			return err
-		}
-
-		if result.ModifiedCount > 0 {
-			if _, err := pr.addSpouseToPersons(ctx, []primitive.ObjectID{insertedPersonParentsIDS[1]}, insertedPersonParentsIDS[0]); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
 func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
 	repositoryPerson := buildRepositoryPersonFromDomainPerson(person)
 
@@ -588,15 +583,16 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*do
 		}
 
 		if len(repositoryPerson.ParentIDS) > 0 {
-			if err := pr.addChildrenToParents(sessCtx, repositoryPerson.ParentIDS, *insertedPersonObjectID); err != nil {
+			if err := pr.updateParentsForInsertedPerson(sessCtx, repositoryPerson.ParentIDS, *insertedPersonObjectID); err != nil {
 				return nil, err
 			}
 		}
 
-		if err := pr.updateSpousesForInsertedPerson(ctx, *insertedPersonObjectID, repositoryPerson.SpouseIDS, repositoryPerson.ParentIDS); err != nil {
-			return nil, err
+		if len(repositoryPerson.SpouseIDS) > 0 {
+			if _, err := pr.addSpouseToPersons(ctx, repositoryPerson.SpouseIDS, *insertedPersonObjectID); err != nil {
+				return nil, err
+			}
 		}
-
 		return insertedPersonObjectID, nil
 	}
 

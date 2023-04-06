@@ -120,66 +120,6 @@ func doGetPersonFamilyRelationshipsRequest(router *gin.Engine, personID string) 
 	return &res, nil, w.Code, nil
 }
 
-func buildFamily(router *gin.Engine, personInsertedIdByName map[string]string) error {
-	if err := storePerson(router, server.StorePersonRequest{Name: "Tunico", Gender: "male"}, personInsertedIdByName); err != nil {
-		return err
-	}
-	tunicoID := personInsertedIdByName["Tunico"]
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Luis", Gender: "male", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
-		return err
-	}
-	luisID := personInsertedIdByName["Luis"]
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Dayse", Gender: "female"}, personInsertedIdByName); err != nil {
-		return err
-	}
-	dayseID := personInsertedIdByName["Dayse"]
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Caio", Gender: "male", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
-		return err
-	}
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Claudia", Gender: "female", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
-		return err
-	}
-	claudiaID := personInsertedIdByName["Claudia"]
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Livia", Gender: "female", MotherID: &claudiaID}, personInsertedIdByName); err != nil {
-		return err
-	}
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Vivian", Gender: "female", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
-		return err
-	}
-	vivianID := personInsertedIdByName["Vivian"]
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Caio Regis", Gender: "male", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
-		return err
-	}
-	caioRegisID := personInsertedIdByName["Caio Regis"]
-
-	if err := storePerson(router, server.StorePersonRequest{Name: "Cauã", Gender: "male", FatherID: &caioRegisID, MotherID: &vivianID}, personInsertedIdByName); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func storePerson(router *gin.Engine, req server.StorePersonRequest, personInsertedIdByName map[string]string) error {
-	resSuccess, _, statusCode, err := doStorePersonRequest(router, req)
-	if err != nil {
-		return err
-	}
-
-	if statusCode != 200 {
-		return fmt.Errorf("test: failed building family of one person. status code: %d", statusCode)
-	}
-
-	personInsertedIdByName[req.Name] = resSuccess.ID
-	return nil
-}
-
 func TestStore(t *testing.T) {
 	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
@@ -315,6 +255,66 @@ func TestStore(t *testing.T) {
 	teardownTest()
 }
 
+func buildFamily(router *gin.Engine, personInsertedIdByName map[string]string) error {
+	if err := storePerson(router, server.StorePersonRequest{Name: "Tunico", Gender: "male"}, personInsertedIdByName); err != nil {
+		return err
+	}
+	tunicoID := personInsertedIdByName["Tunico"]
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Luis", Gender: "male", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
+		return err
+	}
+	luisID := personInsertedIdByName["Luis"]
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Dayse", Gender: "female"}, personInsertedIdByName); err != nil {
+		return err
+	}
+	dayseID := personInsertedIdByName["Dayse"]
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Caio", Gender: "male", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
+		return err
+	}
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Claudia", Gender: "female", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
+		return err
+	}
+	claudiaID := personInsertedIdByName["Claudia"]
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Livia", Gender: "female", MotherID: &claudiaID}, personInsertedIdByName); err != nil {
+		return err
+	}
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Vivian", Gender: "female", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
+		return err
+	}
+	vivianID := personInsertedIdByName["Vivian"]
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Caio Regis", Gender: "male", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
+		return err
+	}
+	caioRegisID := personInsertedIdByName["Caio Regis"]
+
+	if err := storePerson(router, server.StorePersonRequest{Name: "Cauã", Gender: "male", FatherID: &caioRegisID, MotherID: &vivianID}, personInsertedIdByName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func storePerson(router *gin.Engine, req server.StorePersonRequest, personInsertedIdByName map[string]string) error {
+	resSuccess, _, statusCode, err := doStorePersonRequest(router, req)
+	if err != nil {
+		return err
+	}
+
+	if statusCode != 200 {
+		return fmt.Errorf("test: failed building family of one person. status code: %d", statusCode)
+	}
+
+	personInsertedIdByName[req.Name] = resSuccess.ID
+	return nil
+}
+
 func TestGetPersonFamilyGraphHandler(t *testing.T) {
 	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
@@ -332,35 +332,16 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 
 	personInsertedIdByName := map[string]string{}
 	tests := []testArgs{
-		// do failures tests.
-		// {
-		// 	testName: "should return tree when there is just one node",
-		// 	buildFamilyTreeFunc: func() error {
-		// 		if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, personInsertedIdByName); err != nil {
-		// 			return err
-		// 		}
-		// 		return nil
-		// 	},
-		// 	personToSearchName: "Loner",
-		// 	expectedStatusCode: 200,
-		// 	expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
-		// 		{
-		// 			RelationshipPerson: server.RelationshipPerson{
-		// 				Name:   "Loner",
-		// 				Gender: "male",
-		// 			},
-		// 			Relationships: []server.Relationship{}},
-		// 	}},
-		// },
+		//TODO: do failures tests.
 		{
-			testName: "should return tree relationships: nephew, aunt, cousin, spouse, parent, children, sibling",
+			testName: "should return tree when there is just one node",
 			buildFamilyTreeFunc: func() error {
-				if err := buildFamily(router, personInsertedIdByName); err != nil {
+				if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, personInsertedIdByName); err != nil {
 					return err
 				}
 				return nil
 			},
-			personToSearchName: "Caio",
+			personToSearchName: "Loner",
 			expectedStatusCode: 200,
 			expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
 				{
@@ -371,6 +352,27 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 					Relationships: []server.Relationship{}},
 			}},
 		},
+		// {
+		// 	testName: "should return tree relationships: nephew, aunt, cousin, spouse, parent, children, sibling",
+		// 	buildFamilyTreeFunc: func() error {
+		// 		if err := buildFamily(router, personInsertedIdByName); err != nil {
+		// 			return err
+		// 		}
+		// 		return nil
+		// 	},
+		// 	personToSearchName: "Caio",
+		// 	expectedStatusCode: 200,
+		// 	expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
+		// 		{
+		// 			RelationshipPerson: server.RelationshipPerson{
+		// 				Name:   personInsertedIdByName["Caio"].Name,
+		// 				Gender: "male",
+		// 			},
+		// 			Relationships: []server.Relationship{
+		// 				{Person: server.RelationshipPerson{ID: personInsertedIdByName["Luis"], Name: }}
+		// 			}},
+		// 	}},
+		// },
 	}
 
 	for _, tt := range tests {

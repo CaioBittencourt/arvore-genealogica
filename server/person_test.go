@@ -11,11 +11,14 @@ import (
 	"testing"
 
 	"github.com/CaioBittencourt/arvore-genealogica/controller"
+	"github.com/CaioBittencourt/arvore-genealogica/domain"
+	"github.com/CaioBittencourt/arvore-genealogica/errors"
 	"github.com/CaioBittencourt/arvore-genealogica/repository/mongodb"
 	"github.com/CaioBittencourt/arvore-genealogica/server"
 	"github.com/CaioBittencourt/arvore-genealogica/server/routes"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -35,32 +38,19 @@ func teardownTest() {
 	mongoClient.Database(os.Getenv("MONGO_DATABASE")).Collection("person").Drop(context.Background())
 }
 
-// Equalize IDS so i can use assert.Equal. The id cannot be a request argument since its an mongodb object ID
-func addPersonIDToExpectedPersonTreeResponse(expectedMembers []server.PersonWithRelationship, personInsertedIdByName map[string]string) []server.PersonWithRelationship {
-	for i, member := range expectedMembers {
-		expectedMembers[i].ID = personInsertedIdByName[member.Name]
+func addPersonIDToExpectedResponse(expected *server.PersonResponse, personInsertedIdByName map[string]string) {
+	expected.ID = personInsertedIdByName[expected.Name]
 
-		for _, relationship := range expectedMembers[i].Relationships {
-			relationship.Person.ID = personInsertedIdByName[relationship.Person.Name]
-		}
+	for i, expectedParent := range expected.Parents {
+		expected.Parents[i].ID = personInsertedIdByName[expectedParent.Name]
 	}
 
-	return expectedMembers
-}
-
-func addPersonIDToExpectedResponse(expected *server.PersonResponse, actual server.PersonResponse) {
-	expected.ID = actual.ID
-
-	for i, actualParent := range actual.Parents {
-		expected.Parents[i].ID = actualParent.ID
+	for i, expectedChildren := range expected.Children {
+		expected.Children[i].ID = personInsertedIdByName[expectedChildren.Name]
 	}
 
-	for i, actualChildren := range actual.Children {
-		expected.Children[i].ID = actualChildren.ID
-	}
-
-	for i, actualSpouse := range actual.Spouses {
-		expected.Spouses[i].ID = actualSpouse.ID
+	for i, expectedSpouse := range expected.Spouses {
+		expected.Spouses[i].ID = personInsertedIdByName[expectedSpouse.Name]
 	}
 }
 
@@ -155,6 +145,11 @@ func TestStore(t *testing.T) {
 		Gender: "female",
 	}
 
+	denise := server.StorePersonRequest{
+		Name:   "Denise",
+		Gender: "female",
+	}
+
 	tests := []testArgs{
 		{
 			testName: "should return bad request when name has less than 2 characters",
@@ -163,7 +158,7 @@ func TestStore(t *testing.T) {
 				Gender: "male",
 			},
 			expectedStatusCode:    400,
-			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: "name must have more than 1 character"},
+			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: "name must have more than 1 character", ErrorCode: string(errors.InvalidPersonNameErrorCode)},
 		},
 		{
 			testName: "should return bad request when gender is not valid",
@@ -172,7 +167,7 @@ func TestStore(t *testing.T) {
 				Gender: "unexistingGender",
 			},
 			expectedStatusCode:    400,
-			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: "gender has to be male of female"},
+			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: "gender has to be male of female", ErrorCode: string(errors.InvalidPersonGenderErrorCode)},
 		},
 		{
 			testName:           "should store person without relationships",
@@ -187,7 +182,7 @@ func TestStore(t *testing.T) {
 			},
 		},
 		{
-			testName:           "should store person with parents",
+			testName:           "should store person with father",
 			personToStore:      dayse,
 			fatherName:         alfredo.Name,
 			expectedStatusCode: 200,
@@ -200,7 +195,7 @@ func TestStore(t *testing.T) {
 			},
 		},
 		{
-			testName:           "should store person with children and identify spouse relationship",
+			testName:           "should store person with children and identify spouse relationship through children",
 			personToStore:      helena,
 			childrenNames:      []string{dayse.Name},
 			expectedStatusCode: 200,
@@ -210,6 +205,20 @@ func TestStore(t *testing.T) {
 				Parents:  []server.PersonRelativesResponse{},
 				Children: []server.PersonRelativesResponse{{Name: dayse.Name, Gender: dayse.Gender}},
 				Spouses:  []server.PersonRelativesResponse{{Name: alfredo.Name, Gender: alfredo.Gender}},
+			},
+		},
+		{
+			testName:           "should store person with mother and father",
+			personToStore:      denise,
+			fatherName:         alfredo.Name,
+			motherName:         helena.Name,
+			expectedStatusCode: 200,
+			expectedResponse: &server.PersonResponse{
+				Name:     denise.Name,
+				Gender:   denise.Gender,
+				Parents:  []server.PersonRelativesResponse{{Name: helena.Name, Gender: helena.Gender}, {Name: alfredo.Name, Gender: alfredo.Gender}},
+				Children: []server.PersonRelativesResponse{},
+				Spouses:  []server.PersonRelativesResponse{},
 			},
 		},
 	}
@@ -245,8 +254,13 @@ func TestStore(t *testing.T) {
 
 				if tt.expectedResponse != nil {
 					personInsertedIdByName[successRes.Name] = successRes.ID
-					addPersonIDToExpectedResponse(tt.expectedResponse, *successRes)
-					assert.Equal(t, tt.expectedResponse, successRes)
+					addPersonIDToExpectedResponse(tt.expectedResponse, personInsertedIdByName)
+					assert.Equal(t, tt.expectedResponse.Name, successRes.Name)
+					assert.Equal(t, tt.expectedResponse.Gender, successRes.Gender)
+
+					assert.ElementsMatch(t, tt.expectedResponse.Parents, successRes.Parents)
+					assert.ElementsMatch(t, tt.expectedResponse.Children, successRes.Children)
+					assert.ElementsMatch(t, tt.expectedResponse.Spouses, successRes.Spouses)
 				}
 			}
 		}(tt))
@@ -255,21 +269,22 @@ func TestStore(t *testing.T) {
 	teardownTest()
 }
 
-func buildFamily(router *gin.Engine, personInsertedIdByName map[string]string) error {
+func buildFamily(router *gin.Engine, personInsertedIdByName map[string]server.PersonResponse) error {
+
 	if err := storePerson(router, server.StorePersonRequest{Name: "Tunico", Gender: "male"}, personInsertedIdByName); err != nil {
 		return err
 	}
-	tunicoID := personInsertedIdByName["Tunico"]
+	tunicoID := personInsertedIdByName["Tunico"].ID
 
 	if err := storePerson(router, server.StorePersonRequest{Name: "Luis", Gender: "male", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
 		return err
 	}
-	luisID := personInsertedIdByName["Luis"]
+	luisID := personInsertedIdByName["Luis"].ID
 
 	if err := storePerson(router, server.StorePersonRequest{Name: "Dayse", Gender: "female"}, personInsertedIdByName); err != nil {
 		return err
 	}
-	dayseID := personInsertedIdByName["Dayse"]
+	dayseID := personInsertedIdByName["Dayse"].ID
 
 	if err := storePerson(router, server.StorePersonRequest{Name: "Caio", Gender: "male", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
 		return err
@@ -278,40 +293,39 @@ func buildFamily(router *gin.Engine, personInsertedIdByName map[string]string) e
 	if err := storePerson(router, server.StorePersonRequest{Name: "Claudia", Gender: "female", FatherID: &tunicoID}, personInsertedIdByName); err != nil {
 		return err
 	}
-	claudiaID := personInsertedIdByName["Claudia"]
+	claudiaID := personInsertedIdByName["Claudia"].ID
 
 	if err := storePerson(router, server.StorePersonRequest{Name: "Livia", Gender: "female", MotherID: &claudiaID}, personInsertedIdByName); err != nil {
 		return err
 	}
 
-	if err := storePerson(router, server.StorePersonRequest{Name: "Vivian", Gender: "female", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
+	if err := storePerson(router, server.StorePersonRequest{Name: "Cauã", Gender: "male"}, personInsertedIdByName); err != nil {
 		return err
 	}
-	vivianID := personInsertedIdByName["Vivian"]
+	cauaID := personInsertedIdByName["Cauã"].ID
 
-	if err := storePerson(router, server.StorePersonRequest{Name: "Caio Regis", Gender: "male", FatherID: &luisID, MotherID: &dayseID}, personInsertedIdByName); err != nil {
+	if err := storePerson(router, server.StorePersonRequest{Name: "Vivian", Gender: "female", FatherID: &luisID, MotherID: &dayseID, ChildrenIDs: []string{cauaID}}, personInsertedIdByName); err != nil {
 		return err
 	}
-	caioRegisID := personInsertedIdByName["Caio Regis"]
 
-	if err := storePerson(router, server.StorePersonRequest{Name: "Cauã", Gender: "male", FatherID: &caioRegisID, MotherID: &vivianID}, personInsertedIdByName); err != nil {
+	if err := storePerson(router, server.StorePersonRequest{Name: "Caio Regis", Gender: "male", ChildrenIDs: []string{cauaID}}, personInsertedIdByName); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func storePerson(router *gin.Engine, req server.StorePersonRequest, personInsertedIdByName map[string]string) error {
-	resSuccess, _, statusCode, err := doStorePersonRequest(router, req)
+func storePerson(router *gin.Engine, req server.StorePersonRequest, personInsertedIdByName map[string]server.PersonResponse) error {
+	resSuccess, resError, statusCode, err := doStorePersonRequest(router, req)
 	if err != nil {
 		return err
 	}
 
-	if statusCode != 200 {
-		return fmt.Errorf("test: failed building family of one person. status code: %d", statusCode)
+	if statusCode != 200 || resError != nil {
+		return fmt.Errorf("test: failed building family of one person. status code: %d, err: %s", statusCode, resError.ErrorMessage)
 	}
 
-	personInsertedIdByName[req.Name] = resSuccess.ID
+	personInsertedIdByName[req.Name] = *resSuccess
 	return nil
 }
 
@@ -326,53 +340,287 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 		buildFamilyTreeFunc   func() error
 		personToSearchName    string
 		expectedStatusCode    int
-		expectedResponse      *server.PersonTreeResponse
+		buildExpectedResponse func(map[string]server.PersonResponse) *server.PersonTreeResponse
 		expectedErrorResponse *server.ErrorResponse
 	}
 
-	personInsertedIdByName := map[string]string{}
+	insertedPersonByName := map[string]server.PersonResponse{}
+
+	// Unexisting ID
+	insertedPersonByName["UnexistingName"] = server.PersonResponse{ID: primitive.NewObjectID().Hex()}
 	tests := []testArgs{
-		//TODO: do failures tests.
+		{
+			testName: "should return 404 not found when person ID passed dont exist",
+			buildFamilyTreeFunc: func() error {
+				if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personToSearchName:    "UnexistingName",
+			expectedStatusCode:    404,
+			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: "person not found", ErrorCode: "PERSON_NOT_FOUND"},
+		},
 		{
 			testName: "should return tree when there is just one node",
 			buildFamilyTreeFunc: func() error {
-				if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, personInsertedIdByName); err != nil {
+				if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, insertedPersonByName); err != nil {
 					return err
 				}
 				return nil
 			},
 			personToSearchName: "Loner",
 			expectedStatusCode: 200,
-			expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
-				{
-					RelationshipPerson: server.RelationshipPerson{
-						Name:   "Loner",
-						Gender: "male",
+			buildExpectedResponse: func(insertedPersonByName map[string]server.PersonResponse) *server.PersonTreeResponse {
+				return &server.PersonTreeResponse{Members: map[string]server.PersonWithRelationship{
+					insertedPersonByName["Loner"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							Name:   "Loner",
+							Gender: "male",
+						},
+						Relationships: []server.Relationship{},
 					},
-					Relationships: []server.Relationship{}},
-			}},
+				}}
+			},
 		},
-		// {
-		// 	testName: "should return tree relationships: nephew, aunt, cousin, spouse, parent, children, sibling",
-		// 	buildFamilyTreeFunc: func() error {
-		// 		if err := buildFamily(router, personInsertedIdByName); err != nil {
-		// 			return err
-		// 		}
-		// 		return nil
-		// 	},
-		// 	personToSearchName: "Caio",
-		// 	expectedStatusCode: 200,
-		// 	expectedResponse: &server.PersonTreeResponse{Members: []server.PersonWithRelationship{
-		// 		{
-		// 			RelationshipPerson: server.RelationshipPerson{
-		// 				Name:   personInsertedIdByName["Caio"].Name,
-		// 				Gender: "male",
-		// 			},
-		// 			Relationships: []server.Relationship{
-		// 				{Person: server.RelationshipPerson{ID: personInsertedIdByName["Luis"], Name: }}
-		// 			}},
-		// 	}},
-		// },
+		{
+			testName: "should return tree relationships: nephew, aunt, cousin, spouse, parent, children, sibling",
+			buildFamilyTreeFunc: func() error {
+				if err := buildFamily(router, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personToSearchName: "Vivian",
+			expectedStatusCode: 200,
+			buildExpectedResponse: func(insertedPersonByName map[string]server.PersonResponse) *server.PersonTreeResponse {
+				return &server.PersonTreeResponse{Members: map[string]server.PersonWithRelationship{
+					insertedPersonByName["Vivian"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Vivian"].ID,
+							Name:   insertedPersonByName["Vivian"].Name,
+							Gender: insertedPersonByName["Vivian"].Gender,
+						},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Caio Regis"].ID,
+									Name:   insertedPersonByName["Caio Regis"].Name,
+									Gender: insertedPersonByName["Caio Regis"].Gender,
+								},
+								Relationship: string(domain.SpouseRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Luis"].ID,
+									Name:   insertedPersonByName["Luis"].Name,
+									Gender: insertedPersonByName["Luis"].Gender,
+								},
+								Relationship: string(domain.ParentRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Dayse"].ID,
+									Name:   insertedPersonByName["Dayse"].Name,
+									Gender: insertedPersonByName["Dayse"].Gender,
+								},
+								Relationship: string(domain.ParentRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Cauã"].ID,
+									Name:   insertedPersonByName["Cauã"].Name,
+									Gender: insertedPersonByName["Cauã"].Gender,
+								},
+								Relationship: string(domain.ChildRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Livia"].ID,
+									Name:   insertedPersonByName["Livia"].Name,
+									Gender: insertedPersonByName["Livia"].Gender,
+								},
+								Relationship: string(domain.CousinRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Caio"].ID,
+									Name:   insertedPersonByName["Caio"].Name,
+									Gender: insertedPersonByName["Caio"].Gender,
+								},
+								Relationship: string(domain.SiblingRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Claudia"].ID,
+									Name:   insertedPersonByName["Claudia"].Name,
+									Gender: insertedPersonByName["Claudia"].Gender,
+								},
+								Relationship: string(domain.AuntUncleRelashionship),
+							},
+						},
+					},
+					insertedPersonByName["Tunico"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Tunico"].ID,
+							Name:   insertedPersonByName["Tunico"].Name,
+							Gender: insertedPersonByName["Tunico"].Gender,
+						},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Claudia"].ID,
+									Name:   insertedPersonByName["Claudia"].Name,
+									Gender: insertedPersonByName["Claudia"].Gender,
+								},
+								Relationship: string(domain.ChildRelashionship),
+							},
+						},
+					},
+					insertedPersonByName["Dayse"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Dayse"].ID,
+							Name:   insertedPersonByName["Dayse"].Name,
+							Gender: insertedPersonByName["Dayse"].Gender,
+						},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Caio"].ID,
+									Name:   insertedPersonByName["Caio"].Name,
+									Gender: insertedPersonByName["Caio"].Gender,
+								},
+								Relationship: string(domain.ChildRelashionship),
+							},
+						},
+					},
+					insertedPersonByName["Claudia"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Claudia"].ID,
+							Name:   insertedPersonByName["Claudia"].Name,
+							Gender: insertedPersonByName["Claudia"].Gender,
+						},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Livia"].ID,
+									Name:   insertedPersonByName["Livia"].Name,
+									Gender: insertedPersonByName["Livia"].Gender,
+								},
+								Relationship: string(domain.ChildRelashionship),
+							},
+						},
+					},
+					insertedPersonByName["Luis"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Luis"].ID,
+							Name:   insertedPersonByName["Luis"].Name,
+							Gender: insertedPersonByName["Luis"].Gender,
+						},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Tunico"].ID,
+									Name:   insertedPersonByName["Tunico"].Name,
+									Gender: insertedPersonByName["Tunico"].Gender,
+								},
+								Relationship: string(domain.ParentRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Dayse"].ID,
+									Name:   insertedPersonByName["Dayse"].Name,
+									Gender: insertedPersonByName["Dayse"].Gender,
+								},
+								Relationship: string(domain.SpouseRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Livia"].ID,
+									Name:   insertedPersonByName["Livia"].Name,
+									Gender: insertedPersonByName["Livia"].Gender,
+								},
+								Relationship: string(domain.NephewRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Claudia"].ID,
+									Name:   insertedPersonByName["Claudia"].Name,
+									Gender: insertedPersonByName["Claudia"].Gender,
+								},
+								Relationship: string(domain.SiblingRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Caio"].ID,
+									Name:   insertedPersonByName["Caio"].Name,
+									Gender: insertedPersonByName["Caio"].Gender,
+								},
+								Relationship: string(domain.ChildRelashionship),
+							},
+						},
+					},
+					insertedPersonByName["Livia"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Livia"].ID,
+							Name:   insertedPersonByName["Livia"].Name,
+							Gender: insertedPersonByName["Livia"].Gender,
+						},
+						Relationships: []server.Relationship{},
+					},
+					insertedPersonByName["Caio"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Caio"].ID,
+							Name:   insertedPersonByName["Caio"].Name,
+							Gender: insertedPersonByName["Caio"].Gender,
+						},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Livia"].ID,
+									Name:   insertedPersonByName["Livia"].Name,
+									Gender: insertedPersonByName["Livia"].Gender,
+								},
+								Relationship: string(domain.CousinRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Claudia"].ID,
+									Name:   insertedPersonByName["Claudia"].Name,
+									Gender: insertedPersonByName["Claudia"].Gender,
+								},
+								Relationship: string(domain.AuntUncleRelashionship),
+							},
+						},
+					},
+					insertedPersonByName["Caio Regis"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Caio Regis"].ID,
+							Name:   insertedPersonByName["Caio Regis"].Name,
+							Gender: insertedPersonByName["Caio Regis"].Gender,
+						},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Cauã"].ID,
+									Name:   insertedPersonByName["Cauã"].Name,
+									Gender: insertedPersonByName["Cauã"].Gender,
+								},
+								Relationship: string(domain.ChildRelashionship),
+							},
+						},
+					},
+					insertedPersonByName["Cauã"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Cauã"].ID,
+							Name:   insertedPersonByName["Cauã"].Name,
+							Gender: insertedPersonByName["Cauã"].Gender,
+						},
+						Relationships: []server.Relationship{},
+					},
+				}}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -382,7 +630,7 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 					t.Errorf("failed to build family tree: %s", err.Error())
 				}
 
-				successRes, errorRes, statusCode, err := doGetPersonFamilyRelationshipsRequest(router, personInsertedIdByName[tt.personToSearchName])
+				successRes, errorRes, statusCode, err := doGetPersonFamilyRelationshipsRequest(router, insertedPersonByName[tt.personToSearchName].ID)
 				if err != nil {
 					t.Error(err)
 				}
@@ -391,11 +639,19 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 
 				if tt.expectedErrorResponse != nil {
 					assert.Equal(t, tt.expectedErrorResponse, errorRes)
+					return
 				}
 
-				if tt.expectedResponse != nil {
-					addPersonIDToExpectedPersonTreeResponse(tt.expectedResponse.Members, personInsertedIdByName)
-					assert.Equal(t, tt.expectedResponse, successRes)
+				expectedResponse := tt.buildExpectedResponse(insertedPersonByName)
+
+				if expectedResponse != nil {
+					for _, personWithRelationships := range expectedResponse.Members {
+						assert.ElementsMatch(
+							t,
+							personWithRelationships.Relationships,
+							successRes.Members[personWithRelationships.ID].Relationships,
+						)
+					}
 				}
 				teardownTest()
 			}

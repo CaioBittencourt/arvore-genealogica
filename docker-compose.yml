@@ -9,7 +9,6 @@ services:
       - MONGO_REPLICA_SET_NAME=rs0
     ports:
       - '27017:27017'
-    #TODO: ADD SETUP PARA KEYFILE!
     volumes:
       - 'mongo:/data/db'
       - ./keyfile:/opt/keyfile/keyfile

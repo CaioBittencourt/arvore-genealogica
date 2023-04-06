@@ -108,7 +108,7 @@ func TestBuildFamilyRelationships(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(tt testArgs) func(t *testing.T) {
 			return func(t *testing.T) {
-				if err := tt.familyGraph.PopulateWithFamilyRelationships(tt.searchedPersonID); err != nil {
+				if err := tt.familyGraph.PopulateFamilyWithRelationships(tt.searchedPersonID); err != nil {
 					if tt.errorMessage != "" {
 						assert.Equal(t, tt.errorMessage, err.Error())
 						return

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/CaioBittencourt/arvore-genealogica/domain"
-	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -261,7 +260,6 @@ func (pr PersonRepository) graphlookupGetPersonRelativesByPersonIDS(ctx context.
 	var personRelatives []PersonWithRelatives
 	if err := cursor.All(ctx, &personRelatives); err != nil {
 		if err := cursor.Err(); err != nil {
-			log.WithError(err).Warn("cursor: failed to fetch family tree by person id")
 			return nil, err
 		}
 	}
@@ -331,7 +329,7 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 	}
 
 	if len(result) == 0 {
-		return nil, errors.New("unable to find person with that id")
+		return nil, nil
 	}
 
 	personWithAscendants := result[0]
@@ -351,22 +349,18 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 
 	personWithRelatives := personWithAscendants
 
-	spouseIds := []string{personWithRelatives.ID.Hex()}
+	spouseIds := []string{}
 	for _, spouseId := range personWithRelatives.SpouseIDS {
 		spouseIds = append(spouseIds, spouseId.Hex())
 	}
 
-	for _, relative := range personWithRelatives.Relatives {
-		for _, spouseId := range relative.SpouseIDS {
-			spouseIds = append(spouseIds, spouseId.Hex())
+	if len(spouseIds) > 0 {
+		spouses, err := pr.getPersonsByIDS(ctx, spouseIds)
+		if err != nil {
+			return nil, err
 		}
+		relativesLists = append(relativesLists, spouses)
 	}
-
-	spouses, err := pr.getPersonsByIDS(ctx, spouseIds)
-	if err != nil {
-		return nil, err
-	}
-	relativesLists = append(relativesLists, spouses)
 
 	personWithRelatives.Relatives = mergeRelativesIntoSet(relativesLists)
 
@@ -482,7 +476,6 @@ func (pr PersonRepository) getPersonWithImmediateRelativesByIDS(ctx context.Cont
 	var persons []Person
 	if err := cursor.All(ctx, &persons); err != nil {
 		if err := cursor.Err(); err != nil {
-			log.WithError(err).Warn("cursor: failed to fetch person with immediate relatives by person id")
 			return nil, err
 		}
 	}
@@ -506,7 +499,6 @@ func (pr PersonRepository) getPersonsByIDS(ctx context.Context, IDS []string) ([
 	var persons []Person
 	if err := cursor.All(ctx, &persons); err != nil {
 		if err := cursor.Err(); err != nil {
-			log.WithError(err).Warn("cursor: failed to get persons by ids")
 			return nil, err
 		}
 	}
@@ -525,7 +517,6 @@ func (pr PersonRepository) getPersonsByChildrenIDS(ctx context.Context, objectID
 	var persons []Person
 	if err := cursor.All(ctx, &persons); err != nil {
 		if err := cursor.Err(); err != nil {
-			log.WithError(err).Warn("cursor: failed to get persons by ids")
 			return nil, err
 		}
 	}

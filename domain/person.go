@@ -2,7 +2,8 @@ package domain
 
 import (
 	"container/list"
-	"errors"
+
+	"github.com/CaioBittencourt/arvore-genealogica/errors"
 )
 
 type RelationshipType string
@@ -71,7 +72,15 @@ func buildRelationshipWithPerson(person Person, relationshipType RelationshipTyp
 
 func (p Person) Validate() error {
 	if len(p.Parents) > 2 {
-		return errors.New("not allowed to have more than 2 parents")
+		return errors.NewApplicationError("not allowed to have more than 2 parents", errors.TooManyParentsForPersonErrorCode)
+	}
+
+	if len(p.Name) < 2 {
+		return errors.NewApplicationError("name must have more than 1 character", errors.InvalidPersonNameErrorCode)
+	}
+
+	if !p.Gender.IsValid() {
+		return errors.NewApplicationError("gender has to be male of female", errors.InvalidPersonGenderErrorCode)
 	}
 
 	return nil
@@ -216,10 +225,10 @@ func (p Person) FindCurrentGenerationRelationships(personToFindRelationship Pers
 	return nil
 }
 
-func (fg *FamilyGraph) PopulateWithFamilyRelationships(personID string) error {
+func (fg *FamilyGraph) PopulateFamilyWithRelationships(personID string) error {
 	currentPerson, ok := fg.Members[personID]
 	if !ok {
-		return errors.New("person not in graph")
+		return errors.NewApplicationError("person not in graph", errors.PersonNotFoundInGraph)
 	}
 
 	visitPersonQueue := list.New()

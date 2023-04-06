@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/CaioBittencourt/arvore-genealogica/controller"
@@ -17,15 +16,6 @@ type StorePersonRequest struct {
 	MotherID    *string  `json:"motherId"`
 	FatherID    *string  `json:"fatherId`
 	ChildrenIDs []string `json:"childrenIds"`
-}
-
-type ErrorResponse struct {
-	ErrorMessage string `json:"errorMessage"`
-	ErrorCode    string `json:"errorCode"`
-}
-
-func (er ErrorResponse) Error() string {
-	return er.ErrorMessage
 }
 
 type GetBaconsNumberBetweenTwoPersonsResponse struct {
@@ -63,11 +53,16 @@ type PersonWithRelationship struct {
 	Relationships []Relationship `json:"relationships"`
 }
 type PersonTreeResponse struct {
-	Members []PersonWithRelationship `json:"members"`
+	Members map[string]PersonWithRelationship `json:"members"`
 }
 
-func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph) []PersonWithRelationship {
-	var personsWithRelationship []PersonWithRelationship
+func createServerResponseFromError(ctx *gin.Context, err error) {
+	errResponse := BuildErrorResponseFromError(err)
+	ctx.JSON(errResponse.StatusCode, errResponse)
+}
+
+func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph) map[string]PersonWithRelationship {
+	personsWithRelationship := map[string]PersonWithRelationship{}
 	for _, member := range familyGraph.Members {
 		personWithRelationship := PersonWithRelationship{
 			RelationshipPerson: RelationshipPerson{
@@ -91,7 +86,7 @@ func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph)
 				})
 		}
 
-		personsWithRelationship = append(personsWithRelationship, personWithRelationship)
+		personsWithRelationship[member.ID] = personWithRelationship
 	}
 
 	return personsWithRelationship
@@ -103,7 +98,7 @@ func GetPersonFamilyRelationships(personController controller.PersonController) 
 
 		familyGraph, err := personController.GetFamilyGraphByPersonID(ctx, personID)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, ErrorResponse{ErrorMessage: err.Error()})
+			createServerResponseFromError(ctx, err)
 			return
 		}
 
@@ -118,30 +113,17 @@ func GetBaconsNumberBetweenTwoPersons(personController controller.PersonControll
 
 		persons, baconsNumber, err := personController.BaconsNumber(ctx, personAID, personBID)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, err) // fazer error handling / error matching da camada de dominio com a do http
+			createServerResponseFromError(ctx, err)
 			return
 		}
 
 		if baconsNumber == nil {
-			ctx.JSON(404, "unable to find bacons number between this two persons")
+			createServerResponseFromError(ctx, err)
 			return
 		}
 
 		ctx.JSON(http.StatusOK, GetBaconsNumberBetweenTwoPersonsResponse{Persons: buildPersonResponsesFromDomainPersons(persons), BaconsNumber: *baconsNumber})
 	})
-}
-
-func (pr StorePersonRequest) validate() error {
-	gender := domain.GenderType(pr.Gender)
-	if len(pr.Name) < 2 {
-		return ErrorResponse{ErrorMessage: "name must have more than 1 character"}
-	}
-
-	if !gender.IsValid() {
-		return errors.New("gender has to be male of female")
-	}
-
-	return nil
 }
 
 func buildPersonFromStorePersonRequest(personReq StorePersonRequest) domain.Person {
@@ -229,13 +211,7 @@ func Store(personController controller.PersonController) gin.HandlerFunc {
 		var req StorePersonRequest
 
 		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, ErrorResponse{
-				ErrorMessage: err.Error(),
-			})
-			return
-		}
-
-		if err := req.validate(); err != nil {
+			log.WithError(err).Error("server person: store: invalid request")
 			ctx.JSON(http.StatusBadRequest, ErrorResponse{
 				ErrorMessage: err.Error(),
 			})
@@ -245,10 +221,7 @@ func Store(personController controller.PersonController) gin.HandlerFunc {
 		personToStore := buildPersonFromStorePersonRequest(req)
 		person, err := personController.Store(ctx, personToStore)
 		if err != nil {
-			log.WithError(err).Error("error saving person")
-			ctx.JSON(http.StatusInternalServerError, ErrorResponse{
-				ErrorMessage: "failed to store person",
-			})
+			createServerResponseFromError(ctx, err)
 			return
 		}
 

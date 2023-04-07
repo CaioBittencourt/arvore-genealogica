@@ -209,3 +209,145 @@ func TestBaconsNumber(t *testing.T) {
 		}(tt))
 	}
 }
+
+func TestFindRelationshipBetweenPersons(t *testing.T) {
+	type findRelationshipArgs struct {
+		personIDA string
+		personIDB string
+	}
+
+	type testArgs struct {
+		testName             string
+		familyGraph          FamilyGraph
+		findRelationshipArgs findRelationshipArgs
+		expectedRelationship *Person
+	}
+
+	familyGraph := buildFamilyGraph()
+	tests := []testArgs{
+		{
+			testName:             "should return nil person with relationship if person A is not found on the family graph",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "unexistingID", personIDB: "IDLuis"},
+			expectedRelationship: nil,
+		},
+		{
+			testName:             "should return nil person with relationship if person B is not found on the family graph",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "IDLuis", personIDB: "unexistingID"},
+			expectedRelationship: nil,
+		},
+		{
+			testName:             "should return correct person with relationship between cousins",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "IDCaio", personIDB: "IDLivia"},
+			expectedRelationship: &Person{
+				ID: familyGraph.Members["IDCaio"].ID,
+				Relationships: map[string]Relationship{
+					"IDLivia": Relationship{
+						Person: RelationshipPerson{
+							ID: familyGraph.Members["IDLivia"].ID,
+						},
+						Relationship: CousinRelashionship,
+					},
+				},
+			},
+		},
+		{
+			testName:             "should return correct bacons number between spouse",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "IDLuis", personIDB: "IDDayse"},
+			expectedRelationship: &Person{
+				ID: familyGraph.Members["IDLuis"].ID,
+				Relationships: map[string]Relationship{
+					"IDDayse": Relationship{
+						Person: RelationshipPerson{
+							ID: familyGraph.Members["IDDayse"].ID,
+						},
+						Relationship: SpouseRelashionship,
+					},
+				},
+			},
+		},
+		{
+			testName:             "should return correct person with relationship between spouse",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "IDLuis", personIDB: "IDDayse"},
+			expectedRelationship: &Person{
+				ID: familyGraph.Members["IDLuis"].ID,
+				Relationships: map[string]Relationship{
+					"IDDayse": Relationship{
+						Person: RelationshipPerson{
+							ID: familyGraph.Members["IDDayse"].ID,
+						},
+						Relationship: SpouseRelashionship,
+					},
+				},
+			},
+		},
+		{
+			testName:             "should return correct person with relationship for nephew",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "IDCaio", personIDB: "IDCauã"},
+			expectedRelationship: &Person{
+				ID: familyGraph.Members["IDCaio"].ID,
+				Relationships: map[string]Relationship{
+					"IDCauã": Relationship{
+						Person: RelationshipPerson{
+							ID: familyGraph.Members["IDCauã"].ID,
+						},
+						Relationship: NephewRelashionship,
+					},
+				},
+			},
+		},
+		{
+			testName:             "should return correct person with relationship for siblings",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "IDCaio", personIDB: "IDVivian"},
+			expectedRelationship: &Person{
+				ID: familyGraph.Members["IDCaio"].ID,
+				Relationships: map[string]Relationship{
+					"IDVivian": Relationship{
+						Person: RelationshipPerson{
+							ID: familyGraph.Members["IDVivian"].ID,
+						},
+						Relationship: SiblingRelashionship,
+					},
+				},
+			},
+		},
+		{
+			testName:             "should return correct person with relationship for aunt / uncle",
+			familyGraph:          familyGraph,
+			findRelationshipArgs: findRelationshipArgs{personIDA: "IDVivian", personIDB: "IDClaudia"},
+			expectedRelationship: &Person{
+				ID: familyGraph.Members["IDVivian"].ID,
+				Relationships: map[string]Relationship{
+					"IDClaudia": Relationship{
+						Person: RelationshipPerson{
+							ID: familyGraph.Members["IDClaudia"].ID,
+						},
+						Relationship: AuntUncleRelashionship,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(tt testArgs) func(t *testing.T) {
+			return func(t *testing.T) {
+				personWithRelationship := tt.familyGraph.FindRelationshipBetweenPersons(tt.findRelationshipArgs.personIDA, tt.findRelationshipArgs.personIDB)
+				if tt.expectedRelationship == nil {
+					assert.Equal(t, tt.expectedRelationship, personWithRelationship)
+				} else {
+					assert.Equal(t, tt.expectedRelationship.ID, personWithRelationship.ID)
+					for personID, relationship := range tt.expectedRelationship.Relationships {
+						assert.Equal(t, relationship.Person.ID, personWithRelationship.Relationships[personID].Person.ID)
+					}
+				}
+			}
+		}(tt))
+	}
+}

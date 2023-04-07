@@ -669,7 +669,16 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 							Name:   insertedPersonByName["Cauã"].Name,
 							Gender: insertedPersonByName["Cauã"].Gender,
 						},
-						Relationships: []server.Relationship{},
+						Relationships: []server.Relationship{
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Caio"].ID,
+									Name:   insertedPersonByName["Caio"].Name,
+									Gender: insertedPersonByName["Caio"].Gender,
+								},
+								Relationship: string(domain.AuntUncleRelashionship),
+							},
+						},
 					},
 				}}
 			},

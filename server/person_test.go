@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/CaioBittencourt/arvore-genealogica/server"
 	"github.com/CaioBittencourt/arvore-genealogica/server/routes"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -25,9 +27,12 @@ import (
 var mongoClient *mongo.Client
 
 func TestMain(m *testing.M) {
-	os.Setenv("MONGO_DATABASE", "familyTreeTest")
+	err := godotenv.Load("../.env.test")
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
 
-	mongoClient = mongodb.MongoConn("mongodb://mongo:27017")
+	mongoClient = mongodb.MongoConn(os.Getenv("MONGO_URI"))
 	defer mongoClient.Disconnect(context.Background())
 
 	retCode := m.Run()

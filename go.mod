@@ -4,8 +4,8 @@ go 1.20
 
 require (
 	github.com/gin-gonic/gin v1.7.7
-	github.com/joho/godotenv v1.5.1
 	github.com/sirupsen/logrus v1.9.0
+	github.com/stretchr/testify v1.8.2
 	go.mongodb.org/mongo-driver v1.11.3
 )
 
@@ -17,6 +17,7 @@ require (
 	github.com/go-playground/validator/v10 v10.12.0 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/leodido/go-urn v1.2.2 // indirect
@@ -26,8 +27,6 @@ require (
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
-	github.com/stretchr/testify v1.8.2 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.1 // indirect

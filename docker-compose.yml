@@ -20,6 +20,8 @@ services:
     command: "--bind_ip_all --replSet rs0"
 
   server:
+    env_file:
+      - .env
     depends_on:
       mongo:
         condition: service_healthy
@@ -28,9 +30,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # target: release
-      target: development
-    volumes:
-      - './:/go/src/github.com/CaioBittencourt/arvore-genealogica'
+      target: ${TARGET}
 volumes:
   mongo:

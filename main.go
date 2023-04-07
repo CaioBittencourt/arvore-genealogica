@@ -11,16 +11,9 @@ import (
 	"github.com/CaioBittencourt/arvore-genealogica/controller"
 	"github.com/CaioBittencourt/arvore-genealogica/repository/mongodb"
 	"github.com/CaioBittencourt/arvore-genealogica/server/routes"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	err := godotenv.Load(".env")
-	// /etc/.env
-	if err != nil {
-		log.Fatalf("Error loading .env file")
-	}
-
 	mongoClient := mongodb.MongoConn(os.Getenv("MONGO_URI"))
 	defer mongoClient.Disconnect(context.Background())
 

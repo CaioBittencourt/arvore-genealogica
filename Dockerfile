@@ -11,13 +11,10 @@ FROM base as development
 FROM base AS compiler
     COPY . ./
     RUN go mod vendor
-
-FROM compiler AS compiler_server
     RUN CGO_ENABLED=0 GOARCH=amd64 go build -o /bin/server .
 
 FROM alpine:3.17.3 AS release
-    COPY --from=compiler_server /bin/server /bin/server
-    COPY --from=compiler_server /go/src/github.com/CaioBittencourt/arvore-genealogica/.env /etc/.env
+    COPY --from=compiler /bin/server /bin/server
 
     ENV TINI_VERSION v0.19.0
     ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static /bin/tini

@@ -84,6 +84,7 @@ func doStorePersonRequest(router *gin.Engine, req server.StorePersonRequest) (*s
 	return &res, nil, w.Code, nil
 }
 
+// refactor this method to be generic
 func doGetPersonFamilyRelationshipsRequest(router *gin.Engine, personID string) (*server.PersonTreeResponse, *server.ErrorResponse, int, error) {
 	var buf bytes.Buffer
 
@@ -128,6 +129,32 @@ func doGetBaconsNumberBetweenTwoPersonsRequest(router *gin.Engine, personAID str
 	}
 
 	res := server.GetBaconsNumberBetweenTwoPersonsResponse{}
+	err := json.Unmarshal(w.Body.Bytes(), &res)
+	if err != nil {
+		return nil, nil, w.Code, err
+	}
+
+	return &res, nil, w.Code, nil
+}
+
+func doGetRelationshipBetweenPersonsRequest(router *gin.Engine, personAID string, personBID string) (*server.PersonWithRelationship, *server.ErrorResponse, int, error) {
+	var buf bytes.Buffer
+
+	w := httptest.NewRecorder()
+	httpReq, _ := http.NewRequest("GET", fmt.Sprintf("/person/%s/relationship/%s", personAID, personBID), &buf)
+	router.ServeHTTP(w, httpReq)
+
+	if w.Code > 200 {
+		res := server.ErrorResponse{}
+		err := json.Unmarshal(w.Body.Bytes(), &res)
+		if err != nil {
+			return nil, nil, w.Code, err
+		}
+
+		return nil, &res, w.Code, nil
+	}
+
+	res := server.PersonWithRelationship{}
 	err := json.Unmarshal(w.Body.Bytes(), &res)
 	if err != nil {
 		return nil, nil, w.Code, err
@@ -805,6 +832,151 @@ func TestGetBaconsNumberBetweenTwoPersons(t *testing.T) {
 
 				if tt.expectedResponse != nil {
 					assert.Equal(t, tt.expectedResponse, successRes)
+				}
+				teardownTest()
+			}
+		}(tt))
+	}
+}
+
+func TestGetPersonFamilyRelationships(t *testing.T) {
+	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
+	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
+	personController := controller.NewPersonController(personRepository)
+	router := routes.SetupRouter(personController)
+
+	type testArgs struct {
+		testName              string
+		buildFamilyTreeFunc   func() error
+		personAToSearchName   string
+		personBToSearchName   string
+		expectedStatusCode    int
+		buildExpectedResponse func(map[string]server.PersonResponse) *server.PersonWithRelationship
+		expectedErrorResponse *server.ErrorResponse
+	}
+
+	insertedPersonByName := map[string]server.PersonResponse{}
+
+	// Unexisting ID
+	insertedPersonByName["UnexistingNameA"] = server.PersonResponse{ID: primitive.NewObjectID().Hex()}
+	insertedPersonByName["UnexistingNameB"] = server.PersonResponse{ID: primitive.NewObjectID().Hex()}
+	tests := []testArgs{
+		{
+			testName: "should return 404 not found when person ID A passed dont exist",
+			buildFamilyTreeFunc: func() error {
+				if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personAToSearchName:   "UnexistingNameA",
+			personBToSearchName:   "Loner",
+			expectedStatusCode:    404,
+			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: fmt.Sprintf("person with id %s not found", insertedPersonByName["UnexistingNameA"].ID), ErrorCode: "PERSON_NOT_FOUND"},
+		},
+		{
+			testName: "should return 404 not found when person ID B passed dont exist",
+			buildFamilyTreeFunc: func() error {
+				if err := storePerson(router, server.StorePersonRequest{Name: "Loner", Gender: "male"}, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personAToSearchName:   "Loner",
+			personBToSearchName:   "UnexistingNameB",
+			expectedStatusCode:    404,
+			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: fmt.Sprintf("person with id %s not found", insertedPersonByName["UnexistingNameB"].ID), ErrorCode: "PERSON_NOT_FOUND"},
+		},
+		{
+			testName: "should return cousin relationship",
+			buildFamilyTreeFunc: func() error {
+				if err := buildFamily(router, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personAToSearchName: "Caio",
+			personBToSearchName: "Livia",
+			expectedStatusCode:  200,
+			buildExpectedResponse: func(insertedPersonByName map[string]server.PersonResponse) *server.PersonWithRelationship {
+				return &server.PersonWithRelationship{
+					RelationshipPerson: server.RelationshipPerson{
+						Name:   insertedPersonByName["Caio"].Name,
+						ID:     insertedPersonByName["Caio"].ID,
+						Gender: insertedPersonByName["Caio"].Gender,
+					},
+					Relationships: []server.Relationship{
+						{
+							Person: server.RelationshipPerson{
+								Name:   insertedPersonByName["Livia"].Name,
+								ID:     insertedPersonByName["Livia"].ID,
+								Gender: insertedPersonByName["Livia"].Gender,
+							},
+							Relationship: string(domain.CousinRelashionship),
+						},
+					},
+				}
+			},
+		},
+		{
+			testName: "should return spouse relationship",
+			buildFamilyTreeFunc: func() error {
+				if err := buildFamily(router, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personAToSearchName: "Dayse",
+			personBToSearchName: "Luis",
+			expectedStatusCode:  200,
+			buildExpectedResponse: func(insertedPersonByName map[string]server.PersonResponse) *server.PersonWithRelationship {
+				return &server.PersonWithRelationship{
+					RelationshipPerson: server.RelationshipPerson{
+						Name:   insertedPersonByName["Dayse"].Name,
+						ID:     insertedPersonByName["Dayse"].ID,
+						Gender: insertedPersonByName["Dayse"].Gender,
+					},
+					Relationships: []server.Relationship{
+						{
+							Person: server.RelationshipPerson{
+								Name:   insertedPersonByName["Luis"].Name,
+								ID:     insertedPersonByName["Luis"].ID,
+								Gender: insertedPersonByName["Luis"].Gender,
+							},
+							Relationship: string(domain.SpouseRelashionship),
+						},
+					},
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(tt testArgs) func(t *testing.T) {
+			return func(t *testing.T) {
+				if err := tt.buildFamilyTreeFunc(); err != nil {
+					t.Errorf("failed to build family tree: %s", err.Error())
+				}
+
+				successRes, errorRes, statusCode, err := doGetRelationshipBetweenPersonsRequest(
+					router,
+					insertedPersonByName[tt.personAToSearchName].ID,
+					insertedPersonByName[tt.personBToSearchName].ID,
+				)
+				if err != nil {
+					t.Error(err)
+				}
+
+				assert.Equal(t, tt.expectedStatusCode, statusCode)
+
+				if tt.expectedErrorResponse != nil {
+					assert.Equal(t, tt.expectedErrorResponse, errorRes)
+					return
+				}
+
+				expectedResponse := tt.buildExpectedResponse(insertedPersonByName)
+				if expectedResponse != nil {
+					assert.Equal(t, expectedResponse, successRes)
 				}
 				teardownTest()
 			}

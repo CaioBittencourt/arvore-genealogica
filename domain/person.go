@@ -2,6 +2,7 @@ package domain
 
 import (
 	"container/list"
+	"math"
 
 	"github.com/CaioBittencourt/arvore-genealogica/errors"
 )
@@ -223,6 +224,45 @@ func (p Person) FindCurrentGenerationRelationships(personToFindRelationship Pers
 	}
 
 	return nil
+}
+
+func (fg FamilyGraph) FindRelationshipBetweenPersons(personAID string, personBID string) *Person {
+	personA, ok := fg.Members[personAID]
+	if !ok {
+		return nil
+	}
+
+	personB, ok := fg.Members[personBID]
+	if !ok {
+		return nil
+	}
+
+	generationToSearch := personA.Generation - personB.Generation
+	generationDiff := math.Abs(float64(generationToSearch))
+	if generationDiff > 1 {
+		return nil
+	}
+
+	personA.Relationships = map[string]Relationship{}
+	if generationToSearch == -1 {
+		relationship := personA.FindNextGenerationRelationships(*personB)
+		if relationship != nil {
+			personA.Relationships[personB.ID] = *relationship
+		}
+	} else if generationToSearch == 0 {
+		relationship := personA.FindCurrentGenerationRelationships(*personB)
+		if relationship != nil {
+			personA.Relationships[personB.ID] = *relationship
+		}
+	} else if generationToSearch == 1 {
+		relationship := personA.FindCurrentGenerationRelationships(*personB)
+		if relationship != nil {
+			personA.Relationships[personB.ID] = *relationship
+		}
+	}
+
+	return personA
+
 }
 
 func (fg *FamilyGraph) PopulateFamilyWithRelationships(personID string) error {

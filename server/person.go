@@ -60,32 +60,37 @@ func createServerResponseFromError(ctx *gin.Context, err error) {
 	ctx.JSON(errResponse.StatusCode, errResponse)
 }
 
+func buildPersonsWithRelationshipFromPerson(person domain.Person) PersonWithRelationship {
+	personWithRelationship := PersonWithRelationship{
+		RelationshipPerson: RelationshipPerson{
+			Name:   person.Name,
+			ID:     person.ID,
+			Gender: string(person.Gender),
+		},
+	}
+
+	personWithRelationship.Relationships = []Relationship{}
+	for _, relationship := range person.Relationships {
+		personWithRelationship.Relationships = append(
+			personWithRelationship.Relationships,
+			Relationship{
+				Relationship: string(relationship.Relationship),
+				Person: RelationshipPerson{
+					Name:   relationship.Person.Name,
+					ID:     relationship.Person.ID,
+					Gender: string(relationship.Person.Gender),
+				},
+			})
+	}
+
+	return personWithRelationship
+}
+
 func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph) map[string]PersonWithRelationship {
 	personsWithRelationship := map[string]PersonWithRelationship{}
 	for _, member := range familyGraph.Members {
-		personWithRelationship := PersonWithRelationship{
-			RelationshipPerson: RelationshipPerson{
-				Name:   member.Name,
-				ID:     member.ID,
-				Gender: string(member.Gender),
-			},
-		}
-
-		personWithRelationship.Relationships = []Relationship{}
-		for _, relationship := range member.Relationships {
-			personWithRelationship.Relationships = append(
-				personWithRelationship.Relationships,
-				Relationship{
-					Relationship: string(relationship.Relationship),
-					Person: RelationshipPerson{
-						Name:   relationship.Person.Name,
-						ID:     relationship.Person.ID,
-						Gender: string(relationship.Person.Gender),
-					},
-				})
-		}
-
-		personsWithRelationship[member.ID] = personWithRelationship
+		memberWithRelationship := buildPersonsWithRelationshipFromPerson(*member)
+		personsWithRelationship[member.ID] = memberWithRelationship
 	}
 
 	return personsWithRelationship
@@ -117,6 +122,21 @@ func GetBaconsNumberBetweenTwoPersons(personController controller.PersonControll
 		}
 
 		ctx.JSON(http.StatusOK, GetBaconsNumberBetweenTwoPersonsResponse{BaconsNumber: *baconsNumber})
+	})
+}
+
+func GetRelationshipBetweenPersons(personController controller.PersonController) gin.HandlerFunc {
+	return gin.HandlerFunc(func(ctx *gin.Context) {
+		personAID := ctx.Param("id")
+		personBID := ctx.Param("id2")
+
+		personWithRelationship, err := personController.GetRelationshipBetweenPersons(ctx, personAID, personBID)
+		if err != nil {
+			createServerResponseFromError(ctx, err)
+			return
+		}
+
+		ctx.JSON(http.StatusOK, buildPersonsWithRelationshipFromPerson(*personWithRelationship))
 	})
 }
 

@@ -949,6 +949,68 @@ func TestGetPersonFamilyRelationships(t *testing.T) {
 				}
 			},
 		},
+		{
+			testName: "should return nephew relationship",
+			buildFamilyTreeFunc: func() error {
+				if err := buildFamily(router, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personAToSearchName: "Caio",
+			personBToSearchName: "Cauã",
+			expectedStatusCode:  200,
+			buildExpectedResponse: func(insertedPersonByName map[string]server.PersonResponse) *server.PersonWithRelationship {
+				return &server.PersonWithRelationship{
+					RelationshipPerson: server.RelationshipPerson{
+						Name:   insertedPersonByName["Caio"].Name,
+						ID:     insertedPersonByName["Caio"].ID,
+						Gender: insertedPersonByName["Caio"].Gender,
+					},
+					Relationships: []server.Relationship{
+						{
+							Person: server.RelationshipPerson{
+								Name:   insertedPersonByName["Cauã"].Name,
+								ID:     insertedPersonByName["Cauã"].ID,
+								Gender: insertedPersonByName["Cauã"].Gender,
+							},
+							Relationship: string(domain.NephewRelashionship),
+						},
+					},
+				}
+			},
+		},
+		{
+			testName: "should return sibling relationship",
+			buildFamilyTreeFunc: func() error {
+				if err := buildFamily(router, insertedPersonByName); err != nil {
+					return err
+				}
+				return nil
+			},
+			personAToSearchName: "Vivian",
+			personBToSearchName: "Caio",
+			expectedStatusCode:  200,
+			buildExpectedResponse: func(insertedPersonByName map[string]server.PersonResponse) *server.PersonWithRelationship {
+				return &server.PersonWithRelationship{
+					RelationshipPerson: server.RelationshipPerson{
+						Name:   insertedPersonByName["Vivian"].Name,
+						ID:     insertedPersonByName["Vivian"].ID,
+						Gender: insertedPersonByName["Vivian"].Gender,
+					},
+					Relationships: []server.Relationship{
+						{
+							Person: server.RelationshipPerson{
+								Name:   insertedPersonByName["Caio"].Name,
+								ID:     insertedPersonByName["Caio"].ID,
+								Gender: insertedPersonByName["Caio"].Gender,
+							},
+							Relationship: string(domain.SiblingRelashionship),
+						},
+					},
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

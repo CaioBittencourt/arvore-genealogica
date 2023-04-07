@@ -255,7 +255,7 @@ func (fg FamilyGraph) FindRelationshipBetweenPersons(personAID string, personBID
 			personA.Relationships[personB.ID] = *relationship
 		}
 	} else if generationToSearch == 1 {
-		relationship := personA.FindCurrentGenerationRelationships(*personB)
+		relationship := personA.FindPreviouseGenerationRelationships(*personB)
 		if relationship != nil {
 			personA.Relationships[personB.ID] = *relationship
 		}

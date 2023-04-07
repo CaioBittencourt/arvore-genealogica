@@ -548,6 +548,30 @@ func (pr PersonRepository) addSpouseToPersons(ctx context.Context, personObjectI
 	return result, nil
 }
 
+func (pr PersonRepository) updateChildrenForInsertedPerson(ctx context.Context, childrenObjectIDS []primitive.ObjectID, parentObjectID primitive.ObjectID) error {
+	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
+
+	if len(childrenObjectIDS) > 1 {
+		_, err := personCollection.UpdateMany(ctx,
+			bson.D{{"_id", bson.D{{"$in", childrenObjectIDS}}}},
+			bson.D{{"$addToSet", bson.D{{"parentIds", parentObjectID}}}},
+		)
+
+		if err != nil {
+			return err
+		}
+	} else {
+		if _, err := personCollection.UpdateOne(ctx,
+			bson.D{{"_id", childrenObjectIDS[0]}},
+			bson.D{{"$addToSet", bson.D{{"parentIds", parentObjectID}}}},
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
 	repositoryPerson := buildRepositoryPersonFromDomainPerson(person)
 
@@ -575,6 +599,12 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*do
 
 		if len(repositoryPerson.ParentIDS) > 0 {
 			if err := pr.updateParentsForInsertedPerson(sessCtx, repositoryPerson.ParentIDS, *insertedPersonObjectID); err != nil {
+				return nil, err
+			}
+		}
+
+		if len(repositoryPerson.ChildrenIDS) > 0 {
+			if err := pr.updateChildrenForInsertedPerson(sessCtx, repositoryPerson.ChildrenIDS, *insertedPersonObjectID); err != nil {
 				return nil, err
 			}
 		}

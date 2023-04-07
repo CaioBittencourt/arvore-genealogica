@@ -21,14 +21,14 @@ test: setup
 	@go clean --testcache
 
 	@docker compose up --remove-orphans -d mongo
-	TARGET=development ENV_FILE_COMPLEMENT=.test docker compose build server
+	TARGET=development docker compose build server
 
 	@docker compose run \
 		-t${INTERACTIVE} --rm \
 		-v ${PWD}:${APP_DIR}:delegated \
 		-w ${APP_DIR} \
 		--name ${APP_NAME}-test \
-		server go clean --testcache && \
+		server \
 		go test ./... -race
 
 server-prod: setup

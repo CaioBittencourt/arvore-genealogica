@@ -9,6 +9,8 @@ services:
       - MONGO_REPLICA_SET_NAME=rs0
     ports:
       - '27017:27017'
+    extra_hosts:
+      - "mongo:127.0.0.1"
     volumes:
       - 'mongo:/data/db'
       - ./keyfile:/opt/keyfile/keyfile
@@ -31,5 +33,6 @@ services:
       context: .
       dockerfile: Dockerfile
       target: ${TARGET}
+
 volumes:
   mongo:

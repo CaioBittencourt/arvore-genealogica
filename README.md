@@ -22,7 +22,7 @@ The relationships that are identifiable in this application are:
 - spouse
 - aunt/uncle
 
-That being said, what is returned by the API is ALL ascendants of a user plus siblings, nephew, uncles/aunts and spouses, children.
+That being said, what is returned by the API is ALL ascendants of a user plus siblings, nephew, uncles/aunts, spouses and children.
 
 ## Endpoints
 

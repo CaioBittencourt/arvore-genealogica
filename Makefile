@@ -25,6 +25,7 @@ test: setup
 
 	@docker compose run \
 		-t${INTERACTIVE} --rm \
+		-e MONGO_URI=mongodb://mongo:27017 -e MONGO_DATABASE=familyTreeTest \
 		-v ${PWD}:${APP_DIR}:delegated \
 		-w ${APP_DIR} \
 		--name ${APP_NAME}-test \

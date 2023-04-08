@@ -13,6 +13,17 @@ This is an application that builds a family tree to extract relationships amongs
 This application uses MongoDB replica set to leverage atomic transactions and uses `$graphLookup` to recursively search hierarquical data.
 This application has three relationships on a database level. Each person can connect to eachother through: `Children`, `Parent` and `Spouse`. The reason i added the `Spouse` relationship its because this relationship should affect the bacon number. To affect the bacons number you have to change how the family graph is connected.
 
+The relationships that are identifiable in this application are:
+- parent
+- child
+- sibling
+- nephew
+- cousin
+- spouse
+- aunt/uncle
+
+That being said, what is returned by the API is ALL ascendants of a user plus siblings, nephew, uncles/aunts and spouses, children.
+
 ## Endpoints
 
 * POST - /person  => Stores a person

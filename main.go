@@ -8,9 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/CaioBittencourt/arvore-genealogica/controller"
 	"github.com/CaioBittencourt/arvore-genealogica/repository/mongodb"
 	"github.com/CaioBittencourt/arvore-genealogica/server/routes"
+	"github.com/CaioBittencourt/arvore-genealogica/service"
 )
 
 func main() {
@@ -18,9 +18,9 @@ func main() {
 	defer mongoClient.Disconnect(context.Background())
 
 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
-	personController := controller.NewPersonController(personRepository)
+	personService := service.NewPersonService(personRepository)
 
-	router := routes.SetupRouter(personController)
+	router := routes.SetupRouter(personService)
 
 	srv := &http.Server{
 		Addr:    ":80",

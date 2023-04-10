@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/CaioBittencourt/arvore-genealogica/controller"
 	"github.com/CaioBittencourt/arvore-genealogica/domain"
+	"github.com/CaioBittencourt/arvore-genealogica/service"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
@@ -96,11 +96,11 @@ func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph)
 	return personsWithRelationship
 }
 
-func GetPersonFamilyRelationships(personController controller.PersonController) gin.HandlerFunc {
+func GetPersonFamilyRelationships(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personID := ctx.Param("id")
 
-		familyGraph, err := personController.GetFamilyGraphByPersonID(ctx, personID)
+		familyGraph, err := personService.GetFamilyGraphByPersonID(ctx, personID)
 		if err != nil {
 			createServerResponseFromError(ctx, err)
 			return
@@ -110,12 +110,12 @@ func GetPersonFamilyRelationships(personController controller.PersonController) 
 	})
 }
 
-func GetBaconsNumberBetweenTwoPersons(personController controller.PersonController) gin.HandlerFunc {
+func GetBaconsNumberBetweenTwoPersons(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personAID := ctx.Param("id")
 		personBID := ctx.Param("id2")
 
-		baconsNumber, err := personController.BaconsNumber(ctx, personAID, personBID)
+		baconsNumber, err := personService.BaconsNumber(ctx, personAID, personBID)
 		if err != nil {
 			createServerResponseFromError(ctx, err)
 			return
@@ -125,12 +125,12 @@ func GetBaconsNumberBetweenTwoPersons(personController controller.PersonControll
 	})
 }
 
-func GetRelationshipBetweenPersons(personController controller.PersonController) gin.HandlerFunc {
+func GetRelationshipBetweenPersons(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personAID := ctx.Param("id")
 		personBID := ctx.Param("id2")
 
-		personWithRelationship, err := personController.GetRelationshipBetweenPersons(ctx, personAID, personBID)
+		personWithRelationship, err := personService.GetRelationshipBetweenPersons(ctx, personAID, personBID)
 		if err != nil {
 			createServerResponseFromError(ctx, err)
 			return
@@ -220,7 +220,7 @@ func buildPersonResponsesFromDomainPersons(domainPersons []domain.Person) []Pers
 }
 
 // TODO: fix response parents and children for this endpoint
-func Store(personController controller.PersonController) gin.HandlerFunc {
+func Store(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		var req StorePersonRequest
 
@@ -233,7 +233,7 @@ func Store(personController controller.PersonController) gin.HandlerFunc {
 		}
 
 		personToStore := buildPersonFromStorePersonRequest(req)
-		person, err := personController.Store(ctx, personToStore)
+		person, err := personService.Store(ctx, personToStore)
 		if err != nil {
 			createServerResponseFromError(ctx, err)
 			return

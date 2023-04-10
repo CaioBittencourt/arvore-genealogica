@@ -1,13 +1,13 @@
 package routes
 
 import (
-	"github.com/CaioBittencourt/arvore-genealogica/controller"
+	"github.com/CaioBittencourt/arvore-genealogica/service"
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRouter(personController controller.PersonController) *gin.Engine {
+func SetupRouter(personService service.PersonService) *gin.Engine {
 	router := gin.Default()
-	RegisterPersonRoutes(router, personController)
+	RegisterPersonRoutes(router, personService)
 
 	return router
 }

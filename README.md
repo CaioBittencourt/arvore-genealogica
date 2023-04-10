@@ -11,7 +11,7 @@ Desafio stone árvore genealógica
 This is an application that builds a family tree to extract relationships amongst other things!
 
 This application uses MongoDB replica set to leverage atomic transactions and uses `$graphLookup` to recursively search hierarquical data.
-This application has three relationships on a database level. Each person can connect to eachother through: `Children`, `Parent` and `Spouse`. The reason i added the `Spouse` relationship its because this relationship should affect the bacon number. To affect the bacons number you have to change how the family graph is connected.
+This application has three relationships on a database level. Each person can connect to eachother through: `Children`, `Parent` and `Spouse`. The reason i added the `Spouse` relationship its because this relationship should affect the bacon number. To affect the bacons number you have to change how the family graph is connected. Today, you cant pass Spouse as a relationship to the API, this relationship is inferred by inserted `Person`!
 
 The relationships that are identifiable in this application are:
 - parent

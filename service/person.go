@@ -1,4 +1,4 @@
-package controller
+package service
 
 import (
 	"context"
@@ -10,26 +10,26 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type PersonController interface {
+type PersonService interface {
 	GetFamilyGraphByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error)
 	BaconsNumber(ctx context.Context, personAID string, personBID string) (*uint, error)
 	GetRelationshipBetweenPersons(ctx context.Context, personAID string, personBID string) (*domain.Person, error)
 	Store(ctx context.Context, person domain.Person) (*domain.Person, error)
 }
 
-type personController struct {
+type personService struct {
 	personRepository repository.PersonRepository
 }
 
-func NewPersonController(
+func NewPersonService(
 	personRepository repository.PersonRepository,
-) PersonController {
-	return personController{
+) PersonService {
+	return personService{
 		personRepository: personRepository,
 	}
 }
 
-func (pc personController) GetFamilyGraphByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error) {
+func (pc personService) GetFamilyGraphByPersonID(ctx context.Context, personID string) (*domain.FamilyGraph, error) {
 	familyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, personID, nil)
 	if err != nil {
 		log.WithError(err).Error("person: failed to get family graph by ID")
@@ -48,7 +48,7 @@ func (pc personController) GetFamilyGraphByPersonID(ctx context.Context, personI
 	return familyGraph, err
 }
 
-func (pc personController) getBaconNumber(ctx context.Context, personAID string, personBID string) (*uint, error) {
+func (pc personService) getBaconNumber(ctx context.Context, personAID string, personBID string) (*uint, error) {
 	familyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, personAID, nil)
 	if err != nil {
 		log.WithError(err).Error("person: failed to get family graph by ID")
@@ -67,7 +67,7 @@ func (pc personController) getBaconNumber(ctx context.Context, personAID string,
 	return baconsNumber, nil
 }
 
-func (pc personController) BaconsNumber(ctx context.Context, personAID string, personBID string) (*uint, error) {
+func (pc personService) BaconsNumber(ctx context.Context, personAID string, personBID string) (*uint, error) {
 	baconNumber, err := pc.getBaconNumber(ctx, personAID, personBID)
 	if err != nil && !errors.ErrorHasCode(err, errors.PersonNotFoundInGraph) {
 		return nil, err
@@ -82,7 +82,7 @@ func (pc personController) BaconsNumber(ctx context.Context, personAID string, p
 
 }
 
-func (pc personController) getRelationshipBetweenPersons(ctx context.Context, personAID string, personBID string) (*domain.Person, error) {
+func (pc personService) getRelationshipBetweenPersons(ctx context.Context, personAID string, personBID string) (*domain.Person, error) {
 	familyGraph, err := pc.personRepository.GetPersonFamilyGraphByID(ctx, personAID, nil)
 	if err != nil {
 		log.WithError(err).Error("person: failed to get family graph by ID")
@@ -101,7 +101,7 @@ func (pc personController) getRelationshipBetweenPersons(ctx context.Context, pe
 	return personWithRelationship, nil
 }
 
-func (pc personController) GetRelationshipBetweenPersons(ctx context.Context, personAID string, personBID string) (*domain.Person, error) {
+func (pc personService) GetRelationshipBetweenPersons(ctx context.Context, personAID string, personBID string) (*domain.Person, error) {
 	personWithRelationship, err := pc.getRelationshipBetweenPersons(ctx, personAID, personBID)
 	if err != nil && !errors.ErrorHasCode(err, errors.PersonNotFoundInGraph) {
 		return nil, err
@@ -116,7 +116,7 @@ func (pc personController) GetRelationshipBetweenPersons(ctx context.Context, pe
 
 }
 
-func (pc personController) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
+func (pc personService) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
 	if err := person.Validate(); err != nil {
 		log.WithError(err).Error("person: validate failed for person to store")
 		return nil, err

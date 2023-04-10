@@ -10,12 +10,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/CaioBittencourt/arvore-genealogica/controller"
 	"github.com/CaioBittencourt/arvore-genealogica/domain"
 	"github.com/CaioBittencourt/arvore-genealogica/errors"
 	"github.com/CaioBittencourt/arvore-genealogica/repository/mongodb"
 	"github.com/CaioBittencourt/arvore-genealogica/server"
 	"github.com/CaioBittencourt/arvore-genealogica/server/routes"
+	"github.com/CaioBittencourt/arvore-genealogica/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -164,7 +164,7 @@ func doGetRelationshipBetweenPersonsRequest(router *gin.Engine, personAID string
 func TestStore(t *testing.T) {
 	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
-	personController := controller.NewPersonController(personRepository)
+	personController := service.NewPersonController(personRepository)
 	router := routes.SetupRouter(personController)
 
 	// map to get ids to build relationships once that person is inserted
@@ -383,7 +383,7 @@ func storePerson(router *gin.Engine, req server.StorePersonRequest, personInsert
 func TestGetPersonFamilyGraphHandler(t *testing.T) {
 	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
-	personController := controller.NewPersonController(personRepository)
+	personController := service.NewPersonController(personRepository)
 	router := routes.SetupRouter(personController)
 
 	type testArgs struct {
@@ -722,7 +722,7 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 func TestGetBaconsNumberBetweenTwoPersons(t *testing.T) {
 	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
-	personController := controller.NewPersonController(personRepository)
+	personController := service.NewPersonController(personRepository)
 	router := routes.SetupRouter(personController)
 
 	type testArgs struct {
@@ -849,7 +849,7 @@ func TestGetBaconsNumberBetweenTwoPersons(t *testing.T) {
 func TestGetPersonFamilyRelationships(t *testing.T) {
 	//NOTE: Leaving this settup per test in case any tests want to introduce a mock for controllers or repository.
 	personRepository := mongodb.NewPersonRepository(*mongoClient, os.Getenv("MONGO_DATABASE"))
-	personController := controller.NewPersonController(personRepository)
+	personController := service.NewPersonController(personRepository)
 	router := routes.SetupRouter(personController)
 
 	type testArgs struct {

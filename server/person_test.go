@@ -272,6 +272,16 @@ func TestStore(t *testing.T) {
 				Spouses:  []server.PersonRelativesResponse{},
 			},
 		},
+		{
+			testName:      "should return bad request when children already has two parents",
+			childrenNames: []string{dayse.Name},
+			personToStore: server.StorePersonRequest{
+				Name:   "Caio",
+				Gender: "male",
+			},
+			expectedStatusCode:    400,
+			expectedErrorResponse: &server.ErrorResponse{ErrorMessage: "children already have two parents", ErrorCode: string(errors.ChildrenAlreadyHasTwoParents)},
+		},
 	}
 
 	for _, tt := range tests {

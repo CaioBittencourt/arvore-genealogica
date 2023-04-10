@@ -117,12 +117,49 @@ func (pc personService) GetRelationshipBetweenPersons(ctx context.Context, perso
 }
 
 func (pc personService) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
-	if err := person.Validate(); err != nil {
+	var childrens []domain.Person
+	var err error
+	if len(person.Children) > 0 {
+		var childrenIDS []string
+		for _, children := range person.Children {
+			childrenIDS = append(childrenIDS, children.ID)
+		}
+
+		childrens, err = pc.personRepository.GetPersonWithImmediateRelativesByIDS(ctx, childrenIDS)
+		if err != nil {
+			log.WithError(err).Error("person: failed to store person")
+			return nil, err
+		}
+	}
+
+	if err := person.Validate(childrens); err != nil {
 		log.WithError(err).Error("person: validate failed for person to store")
 		return nil, err
 	}
 
-	insertedPerson, err := pc.personRepository.Store(ctx, person)
+	for _, children := range childrens {
+		mySpouseID := children.Parents[0].ID
+		if len(children.Parents) == 1 {
+			person.Spouses = append(person.Spouses, &domain.Person{ID: mySpouseID})
+		}
+	}
+
+	// add relationship spouse between my parents if they dont have it already between them.
+	spousesToInsert := map[string]string{}
+	if len(person.Parents) == 2 {
+		for i, parent := range person.Parents {
+			var mySpouseID string
+			if i == 0 {
+				mySpouseID = person.Parents[i+1].ID
+			} else {
+				mySpouseID = person.Parents[i-1].ID
+			}
+
+			spousesToInsert[parent.ID] = mySpouseID
+		}
+	}
+
+	insertedPerson, err := pc.personRepository.Store(ctx, person, spousesToInsert)
 	if err != nil {
 		log.WithError(err).Error("person: failed to store person")
 		return nil, err

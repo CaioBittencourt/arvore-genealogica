@@ -372,38 +372,11 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 func (pr PersonRepository) updateParentsForInsertedPerson(ctx context.Context, parentsObjectIDS []primitive.ObjectID, childrenObjectID primitive.ObjectID) error {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
-	if len(parentsObjectIDS) > 2 {
-		return errors.New("children cant have more than 2 parents")
-	}
-
-	if len(parentsObjectIDS) == 2 {
-		var operations []mongo.WriteModel
-		for i, parentObjectID := range parentsObjectIDS {
-			var mySpouse primitive.ObjectID
-			if i == 0 {
-				mySpouse = parentsObjectIDS[i+1]
-			} else {
-				mySpouse = parentsObjectIDS[i-1]
-			}
-
-			operation := mongo.NewUpdateOneModel()
-			operation.SetFilter(bson.M{"_id": parentObjectID})
-			operation.SetUpdate(bson.M{"$addToSet": bson.M{"childrenIds": childrenObjectID, "spouseIds": mySpouse}})
-
-			operations = append(operations, operation)
-		}
-
-		_, err := personCollection.BulkWrite(ctx, operations)
-		if err != nil {
-			return err
-		}
-	} else {
-		if _, err := personCollection.UpdateOne(ctx,
-			bson.D{{"_id", parentsObjectIDS[0]}},
-			bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
-		); err != nil {
-			return err
-		}
+	if _, err := personCollection.UpdateMany(ctx,
+		bson.D{{"_id", bson.D{{"$in", parentsObjectIDS}}}},
+		bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
+	); err != nil {
+		return err
 	}
 
 	return nil
@@ -430,6 +403,7 @@ func (pr PersonRepository) storePerson(ctx context.Context, person Person) (*pri
 
 	return &insertedPersonObjectID, nil
 }
+
 func (pr PersonRepository) getPersonWithImmediateRelativesByIDS(ctx context.Context, personIDS []string) ([]Person, error) {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
@@ -481,6 +455,15 @@ func (pr PersonRepository) getPersonWithImmediateRelativesByIDS(ctx context.Cont
 	}
 
 	return persons, nil
+}
+
+func (pr PersonRepository) GetPersonWithImmediateRelativesByIDS(ctx context.Context, personIDS []string) ([]domain.Person, error) {
+	persons, err := pr.getPersonWithImmediateRelativesByIDS(ctx, personIDS)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildDomainPersonsFromRepositoryPersons(persons), nil
 }
 
 func (pr PersonRepository) getPersonsByIDS(ctx context.Context, IDS []string) ([]Person, error) {
@@ -572,24 +555,8 @@ func (pr PersonRepository) updateChildrenForInsertedPerson(ctx context.Context, 
 	return nil
 }
 
-func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*domain.Person, error) {
+func (pr PersonRepository) Store(ctx context.Context, person domain.Person, spousesToInsert map[string]string) (*domain.Person, error) {
 	repositoryPerson := buildRepositoryPersonFromDomainPerson(person)
-
-	var spouses []Person
-	var err error
-	if len(repositoryPerson.ChildrenIDS) > 0 {
-		spouses, err = pr.getPersonsByChildrenIDS(ctx, repositoryPerson.ChildrenIDS)
-		if err != nil {
-			return nil, err
-		}
-
-	}
-
-	if len(spouses) > 0 {
-		for _, currentSpouse := range spouses {
-			repositoryPerson.SpouseIDS = append(repositoryPerson.SpouseIDS, currentSpouse.ID)
-		}
-	}
 
 	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
 		insertedPersonObjectID, err := pr.storePerson(sessCtx, repositoryPerson)
@@ -612,6 +579,24 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person) (*do
 		if len(repositoryPerson.SpouseIDS) > 0 {
 			if _, err := pr.addSpouseToPersons(ctx, repositoryPerson.SpouseIDS, *insertedPersonObjectID); err != nil {
 				return nil, err
+			}
+		}
+
+		if len(spousesToInsert) > 0 {
+			for spouseID, personID := range spousesToInsert {
+				personObjectID, err := primitive.ObjectIDFromHex(personID)
+				if err != nil {
+					return nil, err
+				}
+
+				spouseObjectID, err := primitive.ObjectIDFromHex(spouseID)
+				if err != nil {
+					return nil, err
+				}
+
+				if _, err := pr.addSpouseToPersons(ctx, []primitive.ObjectID{personObjectID}, spouseObjectID); err != nil {
+					return nil, err
+				}
 			}
 		}
 		return insertedPersonObjectID, nil

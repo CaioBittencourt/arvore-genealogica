@@ -71,7 +71,7 @@ func buildRelationshipWithPerson(person Person, relationshipType RelationshipTyp
 	}
 }
 
-func (p Person) Validate() error {
+func (p Person) Validate(childrens []Person) error {
 	if len(p.Parents) > 2 {
 		return errors.NewApplicationError("not allowed to have more than 2 parents", errors.TooManyParentsForPersonErrorCode)
 	}
@@ -82,6 +82,12 @@ func (p Person) Validate() error {
 
 	if !p.Gender.IsValid() {
 		return errors.NewApplicationError("gender has to be male of female", errors.InvalidPersonGenderErrorCode)
+	}
+
+	for _, children := range childrens {
+		if len(children.Parents) > 1 {
+			return errors.NewApplicationError("children already have two parents", errors.ChildrenAlreadyHasTwoParents)
+		}
 	}
 
 	return nil

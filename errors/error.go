@@ -8,6 +8,7 @@ const (
 	InvalidPersonNameErrorCode       ApplicationErrorCode = "INVALID_PERSON_NAME"
 	TooManyParentsForPersonErrorCode ApplicationErrorCode = "TOO_MANY_PARENTS_FOR_PERSON"
 	InvalidPersonGenderErrorCode     ApplicationErrorCode = "INVALID_PERSON_GENDER"
+	ChildrenAlreadyHasTwoParents     ApplicationErrorCode = "CHILDREN_ALREADY_HAVE_TWO_PARENTS"
 )
 
 type ApplicationError struct {

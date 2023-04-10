@@ -14,7 +14,7 @@ type StorePersonRequest struct {
 	Name        string   `json:"name"`
 	Gender      string   `json:"gender"`
 	MotherID    *string  `json:"motherId"`
-	FatherID    *string  `json:"fatherId`
+	FatherID    *string  `json:"fatherId"`
 	ChildrenIDs []string `json:"childrenIds"`
 }
 

@@ -23,6 +23,7 @@ var errorResponseConfigurationByApplicationErrorCode = map[errors.ApplicationErr
 	errors.InvalidPersonNameErrorCode:       {ErrorShouldBeVisible: true, ErrorStatusCode: 400},
 	errors.TooManyParentsForPersonErrorCode: {ErrorShouldBeVisible: true, ErrorStatusCode: 400},
 	errors.InvalidPersonGenderErrorCode:     {ErrorShouldBeVisible: true, ErrorStatusCode: 400},
+	errors.ChildrenAlreadyHasTwoParents:     {ErrorShouldBeVisible: true, ErrorStatusCode: 400},
 }
 
 func (er ErrorResponse) Error() string {

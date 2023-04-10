@@ -138,8 +138,8 @@ func (pc personService) Store(ctx context.Context, person domain.Person) (*domai
 	}
 
 	for _, children := range childrens {
-		mySpouseID := children.Parents[0].ID
 		if len(children.Parents) == 1 {
+			mySpouseID := children.Parents[0].ID
 			person.Spouses = append(person.Spouses, &domain.Person{ID: mySpouseID})
 		}
 	}

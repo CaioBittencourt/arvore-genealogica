@@ -369,12 +369,20 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 	return &familyGraph, nil
 }
 
-func (pr PersonRepository) updateParentsForInsertedPerson(ctx context.Context, parentsObjectIDS []primitive.ObjectID, childrenObjectID primitive.ObjectID) error {
+func (pr PersonRepository) updateParentsForInsertedPerson(ctx context.Context, parentsObjectID primitive.ObjectID, childrenObjectID primitive.ObjectID, spouseID *primitive.ObjectID) error {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
+	var updateStatement bson.M
+	if spouseID != nil {
+		updateStatement = bson.M{"$addToSet": bson.M{"childrenIds": childrenObjectID, "spouseIds": spouseID}}
+	} else {
+		updateStatement = bson.M{"$addToSet": bson.M{"childrenIds": childrenObjectID}}
+	}
+
 	if _, err := personCollection.UpdateMany(ctx,
-		bson.D{{"_id", bson.D{{"$in", parentsObjectIDS}}}},
-		bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}}},
+		bson.D{{"_id", parentsObjectID}},
+		updateStatement,
+		// bson.D{{"$addToSet", bson.D{{"childrenIds", childrenObjectID}}, bson.D{{"spouseIds", spouseID}}}},
 	); err != nil {
 		return err
 	}
@@ -565,8 +573,20 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person, spou
 		}
 
 		if len(repositoryPerson.ParentIDS) > 0 {
-			if err := pr.updateParentsForInsertedPerson(sessCtx, repositoryPerson.ParentIDS, *insertedPersonObjectID); err != nil {
-				return nil, err
+			for _, parentID := range repositoryPerson.ParentIDS {
+				mySpouseID, ok := spousesToInsert[parentID.Hex()]
+				var mySpouseObjectID *primitive.ObjectID
+				if ok {
+					objectID, err := primitive.ObjectIDFromHex(mySpouseID)
+					if err != nil {
+						return nil, err
+					}
+
+					mySpouseObjectID = &objectID
+				}
+				if err := pr.updateParentsForInsertedPerson(sessCtx, parentID, *insertedPersonObjectID, mySpouseObjectID); err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -579,24 +599,6 @@ func (pr PersonRepository) Store(ctx context.Context, person domain.Person, spou
 		if len(repositoryPerson.SpouseIDS) > 0 {
 			if _, err := pr.addSpouseToPersons(ctx, repositoryPerson.SpouseIDS, *insertedPersonObjectID); err != nil {
 				return nil, err
-			}
-		}
-
-		if len(spousesToInsert) > 0 {
-			for spouseID, personID := range spousesToInsert {
-				personObjectID, err := primitive.ObjectIDFromHex(personID)
-				if err != nil {
-					return nil, err
-				}
-
-				spouseObjectID, err := primitive.ObjectIDFromHex(spouseID)
-				if err != nil {
-					return nil, err
-				}
-
-				if _, err := pr.addSpouseToPersons(ctx, []primitive.ObjectID{personObjectID}, spouseObjectID); err != nil {
-					return nil, err
-				}
 			}
 		}
 		return insertedPersonObjectID, nil

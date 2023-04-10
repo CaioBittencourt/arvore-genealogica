@@ -223,21 +223,21 @@ func (pr PersonRepository) graphlookupGetPersonRelativesByPersonIDS(ctx context.
 		return nil, err
 	}
 
-	matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{"$in", objectIDS}}}}}}
-	graphLookupParameters := bson.D{
-		{"from", personCollectionName},
-		{"startWith", fmt.Sprintf("$%s", connectFromField)},
-		{"connectFromField", connectFromField},
-		{"connectToField", "_id"},
-		{"as", relativesFieldName},
-		{"depthField", depthFieldName},
+	matchStage := bson.M{"$match": bson.M{"_id": bson.M{"$in": objectIDS}}}
+	graphLookupParameters := bson.M{
+		"from":             personCollectionName,
+		"startWith":        fmt.Sprintf("$%s", connectFromField),
+		"connectFromField": connectFromField,
+		"connectToField":   "_id",
+		"as":               relativesFieldName,
+		"depthField":       depthFieldName,
 	}
 
 	if maxDepth != nil {
-		graphLookupParameters = append(graphLookupParameters, bson.E{"maxDepth", *maxDepth})
+		graphLookupParameters["maxDepth"] = *maxDepth
 	}
 
-	graphLookupStage := bson.D{{"$graphLookup", graphLookupParameters}}
+	graphLookupStage := bson.M{"$graphLookup": graphLookupParameters}
 	pipelineStages := bson.A{
 		matchStage,
 		graphLookupStage,
@@ -334,9 +334,7 @@ func (pr PersonRepository) GetPersonFamilyGraphByID(ctx context.Context, personI
 		return nil, err
 	}
 
-	for _, descendantsRelatives := range listOfDescendantsRelatives {
-		relativesLists = append(relativesLists, descendantsRelatives)
-	}
+	relativesLists = append(relativesLists, listOfDescendantsRelatives...)
 
 	personWithRelatives := personWithAscendants
 
@@ -366,7 +364,7 @@ func (pr PersonRepository) updateParentsForInsertedPerson(ctx context.Context, p
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
 	if _, err := personCollection.UpdateMany(ctx,
-		bson.D{{"_id", bson.D{{"$in", parentsObjectIDS}}}},
+		bson.M{"_id": bson.M{"$in": parentsObjectIDS}},
 		bson.M{"$addToSet": bson.M{"childrenIds": childrenObjectID}},
 	); err != nil {
 		return err
@@ -378,11 +376,11 @@ func (pr PersonRepository) updateParentsForInsertedPerson(ctx context.Context, p
 func (pr PersonRepository) storePerson(ctx context.Context, person Person) (*primitive.ObjectID, error) {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
-	insertedPerson, err := personCollection.InsertOne(ctx, bson.D{
-		{"name", person.Name},
-		{"gender", person.Gender},
-		{"parentIds", person.ParentIDS},
-		{"childrenIds", person.ChildrenIDS},
+	insertedPerson, err := personCollection.InsertOne(ctx, bson.M{
+		"name":        person.Name,
+		"gender":      person.Gender,
+		"parentIds":   person.ParentIDS,
+		"childrenIds": person.ChildrenIDS,
 	})
 	if err != nil {
 		return nil, err
@@ -404,21 +402,21 @@ func (pr PersonRepository) getPersonWithImmediateRelativesByIDS(ctx context.Cont
 		return nil, err
 	}
 
-	matchStage := bson.D{{"$match", bson.D{{"_id", bson.D{{"$in", objectIDS}}}}}}
+	matchStage := bson.M{"$match": bson.M{"_id": bson.M{"$in": objectIDS}}}
 
-	lookupParentsStage := bson.D{{"$lookup", bson.D{
-		{"from", personCollectionName},
-		{"localField", "parentIds"},
-		{"foreignField", "_id"},
-		{"as", "parents"},
-	}}}
+	lookupParentsStage := bson.M{"$lookup": bson.M{
+		"from":         personCollectionName,
+		"localField":   "parentIds",
+		"foreignField": "_id",
+		"as":           "parents",
+	}}
 
-	lookupChildrenStage := bson.D{{"$lookup", bson.D{
-		{"from", personCollectionName},
-		{"localField", "childrenIds"},
-		{"foreignField", "_id"},
-		{"as", "children"},
-	}}}
+	lookupChildrenStage := bson.M{"$lookup": bson.M{
+		"from":         personCollectionName,
+		"localField":   "childrenIds",
+		"foreignField": "_id",
+		"as":           "children",
+	}}
 
 	pipelineStages := bson.A{
 		matchStage,
@@ -450,33 +448,10 @@ func (pr PersonRepository) GetPersonWithImmediateRelativesByIDS(ctx context.Cont
 	return buildDomainPersonsFromRepositoryPersons(persons), nil
 }
 
-func (pr PersonRepository) getPersonsByIDS(ctx context.Context, IDS []string) ([]Person, error) {
-	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
-
-	objectIDS, err := convertIDStringToObjectsIDS(IDS)
-	if err != nil {
-		return nil, err
-	}
-
-	cursor, err := personCollection.Find(ctx, bson.D{{"_id", bson.D{{"$in", objectIDS}}}})
-	if err != nil {
-		return nil, err
-	}
-
-	var persons []Person
-	if err := cursor.All(ctx, &persons); err != nil {
-		if err := cursor.Err(); err != nil {
-			return nil, err
-		}
-	}
-
-	return persons, nil
-}
-
 func (pr PersonRepository) getPersonsByChildrenIDS(ctx context.Context, objectIDS []primitive.ObjectID) ([]Person, error) {
 	personCollection := pr.client.Database(pr.databaseName).Collection(personCollectionName)
 
-	cursor, err := personCollection.Find(ctx, bson.D{{"childrenIds", bson.D{{"$in", objectIDS}}}})
+	cursor, err := personCollection.Find(ctx, bson.M{"childrenIds": bson.M{"$in": objectIDS}})
 	if err != nil {
 		return nil, err
 	}
@@ -496,8 +471,8 @@ func (pr PersonRepository) updateChildrenForInsertedPerson(ctx context.Context, 
 
 	if len(childrenObjectIDS) > 1 {
 		_, err := personCollection.UpdateMany(ctx,
-			bson.D{{"_id", bson.D{{"$in", childrenObjectIDS}}}},
-			bson.D{{"$addToSet", bson.D{{"parentIds", parentObjectID}}}},
+			bson.M{"_id": bson.M{"$in": childrenObjectIDS}},
+			bson.M{"$addToSet": bson.M{"parentIds": parentObjectID}},
 		)
 
 		if err != nil {
@@ -505,8 +480,8 @@ func (pr PersonRepository) updateChildrenForInsertedPerson(ctx context.Context, 
 		}
 	} else {
 		if _, err := personCollection.UpdateOne(ctx,
-			bson.D{{"_id", childrenObjectIDS[0]}},
-			bson.D{{"$addToSet", bson.D{{"parentIds", parentObjectID}}}},
+			bson.M{"_id": childrenObjectIDS[0]},
+			bson.M{"$addToSet": bson.M{"parentIds": parentObjectID}},
 		); err != nil {
 			return err
 		}

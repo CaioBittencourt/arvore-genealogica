@@ -231,15 +231,6 @@ func buildPersonResponseFromDomainPerson(domainPerson domain.Person) PersonRespo
 	return personResponse
 }
 
-func buildPersonResponsesFromDomainPersons(domainPersons []domain.Person) []PersonResponse {
-	var personResponses []PersonResponse
-	for _, domainPerson := range domainPersons {
-		personResponses = append(personResponses, buildPersonResponseFromDomainPerson(domainPerson))
-	}
-
-	return personResponses
-}
-
 // @Summary      Store person
 // @Description  Store person
 // @Accept       json

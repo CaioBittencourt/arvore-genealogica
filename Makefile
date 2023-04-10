@@ -12,10 +12,13 @@ ifeq ("$(wildcard ./keyfile)","")
 	sudo chgrp 999 keyfile
 endif
 
+.env:
+	@cp .env.sample .env
+
 mod:
 	@go mod vendor
 
-setup: mod generate-mongodb-keyfile
+setup: mod generate-mongodb-keyfile .env
 
 test: setup
 	@go clean --testcache

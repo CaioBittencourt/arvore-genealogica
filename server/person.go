@@ -96,6 +96,16 @@ func buildPersonsWithRelationshipFromFamilyGraph(familyGraph domain.FamilyGraph)
 	return personsWithRelationship
 }
 
+// @Summary      Get family tree with relationships for person
+// @Description  Get family tree with relationships for person
+// @Accept       json
+// @Produce      json
+// @Param        id   path       string  true  "Person ID"
+// @Success      200  {object}   PersonTreeResponse
+// @Failure      400  {object}   ErrorResponse
+// @Failure      404  {object}   ErrorResponse
+// @Failure      500  {object}   ErrorResponse
+// @Router       /person/:id/tree [get]
 func GetPersonFamilyRelationships(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personID := ctx.Param("id")
@@ -110,6 +120,17 @@ func GetPersonFamilyRelationships(personService service.PersonService) gin.Handl
 	})
 }
 
+// @Summary      Get bacons number between two persons
+// @Description  Get bacons number between two persons
+// @Accept       json
+// @Produce      json
+// @Param        id   path       string  true  "Person ID"
+// @Param        id2   path      string  true  "Person 2 ID"
+// @Success      200  {object}   GetBaconsNumberBetweenTwoPersonsResponse
+// @Failure      400  {object}   ErrorResponse
+// @Failure      404  {object}   ErrorResponse
+// @Failure      500  {object}   ErrorResponse
+// @Router       /person/:id/baconNumber/:id2 [get]
 func GetBaconsNumberBetweenTwoPersons(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personAID := ctx.Param("id")
@@ -125,6 +146,17 @@ func GetBaconsNumberBetweenTwoPersons(personService service.PersonService) gin.H
 	})
 }
 
+// @Summary      Get relationship between two persons
+// @Description  Get relationship between two persons
+// @Accept       json
+// @Produce      json
+// @Param        id   path       string  true  "Person ID"
+// @Param        id2   path      string  true  "Person 2 ID"
+// @Success      200  {object}   PersonWithRelationship
+// @Failure      400  {object}   ErrorResponse
+// @Failure      404  {object}   ErrorResponse
+// @Failure      500  {object}   ErrorResponse
+// @Router       /person/:id/relationship/:id2 [get]
 func GetRelationshipBetweenPersons(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		personAID := ctx.Param("id")
@@ -219,7 +251,15 @@ func buildPersonResponsesFromDomainPersons(domainPersons []domain.Person) []Pers
 	return personResponses
 }
 
-// TODO: fix response parents and children for this endpoint
+// @Summary      Store person
+// @Description  Store person
+// @Accept       json
+// @Produce      json
+// @Param        person   body       StorePersonRequest  true  "Person to store"
+// @Success      200  {object}   PersonResponse
+// @Failure      400  {object}   ErrorResponse
+// @Failure      500  {object}   ErrorResponse
+// @Router       /person [post]
 func Store(personService service.PersonService) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		var req StorePersonRequest

@@ -8,9 +8,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	docs "github.com/CaioBittencourt/arvore-genealogica/docs"
 	"github.com/CaioBittencourt/arvore-genealogica/repository/mongodb"
 	"github.com/CaioBittencourt/arvore-genealogica/server/routes"
 	"github.com/CaioBittencourt/arvore-genealogica/service"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func main() {
@@ -21,6 +24,9 @@ func main() {
 	personService := service.NewPersonService(personRepository)
 
 	router := routes.SetupRouter(personService)
+
+	docs.SwaggerInfo.BasePath = "/person"
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	srv := &http.Server{
 		Addr:    ":80",

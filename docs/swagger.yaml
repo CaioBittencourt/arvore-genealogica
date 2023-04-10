@@ -1,0 +1,229 @@
+definitions:
+  server.ErrorResponse:
+    properties:
+      errorCode:
+        type: string
+      errorMessage:
+        type: string
+    type: object
+  server.GetBaconsNumberBetweenTwoPersonsResponse:
+    properties:
+      baconsNumber:
+        type: integer
+    type: object
+  server.PersonRelativesResponse:
+    properties:
+      gender:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  server.PersonResponse:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/server.PersonRelativesResponse'
+        type: array
+      gender:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      parents:
+        items:
+          $ref: '#/definitions/server.PersonRelativesResponse'
+        type: array
+      spouses:
+        items:
+          $ref: '#/definitions/server.PersonRelativesResponse'
+        type: array
+    type: object
+  server.PersonTreeResponse:
+    properties:
+      members:
+        additionalProperties:
+          $ref: '#/definitions/server.PersonWithRelationship'
+        type: object
+    type: object
+  server.PersonWithRelationship:
+    properties:
+      gender:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      relationships:
+        items:
+          $ref: '#/definitions/server.Relationship'
+        type: array
+    type: object
+  server.Relationship:
+    properties:
+      person:
+        $ref: '#/definitions/server.RelationshipPerson'
+      relationship:
+        type: string
+    type: object
+  server.RelationshipPerson:
+    properties:
+      gender:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  server.StorePersonRequest:
+    properties:
+      childrenIds:
+        items:
+          type: string
+        type: array
+      fatherID:
+        type: string
+      gender:
+        type: string
+      motherId:
+        type: string
+      name:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /person:
+    post:
+      consumes:
+      - application/json
+      description: Store person
+      parameters:
+      - description: Person to store
+        in: body
+        name: person
+        required: true
+        schema:
+          $ref: '#/definitions/server.StorePersonRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.PersonResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+      summary: Store person
+  /person/:id/baconNumber/:id2:
+    get:
+      consumes:
+      - application/json
+      description: Get bacons number between two persons
+      parameters:
+      - description: Person ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Person 2 ID
+        in: path
+        name: id2
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.GetBaconsNumberBetweenTwoPersonsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+      summary: Get bacons number between two persons
+  /person/:id/relationship/:id2:
+    get:
+      consumes:
+      - application/json
+      description: Get relationship between two persons
+      parameters:
+      - description: Person ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Person 2 ID
+        in: path
+        name: id2
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.PersonWithRelationship'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+      summary: Get relationship between two persons
+  /person/:id/tree:
+    get:
+      consumes:
+      - application/json
+      description: Get family tree with relationships for person
+      parameters:
+      - description: Person ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/server.PersonTreeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/server.ErrorResponse'
+      summary: Get family tree with relationships for person
+swagger: "2.0"

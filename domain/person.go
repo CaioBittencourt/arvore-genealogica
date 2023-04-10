@@ -93,6 +93,16 @@ func (p Person) Validate(childrens []Person) error {
 	return nil
 }
 
+func (p Person) HasSpouse(possibleSpouse Person) bool {
+	for _, parent := range p.Spouses {
+		if parent.ID == possibleSpouse.ID {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (p Person) isParent(possibleParent Person) bool {
 	for _, parent := range p.Parents {
 		if parent.ID == possibleParent.ID {

@@ -272,12 +272,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/server.PersonRelativesResponse"
                     }
-                },
-                "spouses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/server.PersonRelativesResponse"
-                    }
                 }
             }
         },
@@ -346,7 +340,7 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "fatherID": {
+                "fatherId": {
                     "type": "string"
                 },
                 "gender": {

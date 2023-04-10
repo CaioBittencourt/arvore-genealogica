@@ -36,10 +36,6 @@ definitions:
         items:
           $ref: '#/definitions/server.PersonRelativesResponse'
         type: array
-      spouses:
-        items:
-          $ref: '#/definitions/server.PersonRelativesResponse'
-        type: array
     type: object
   server.PersonTreeResponse:
     properties:
@@ -83,7 +79,7 @@ definitions:
         items:
           type: string
         type: array
-      fatherID:
+      fatherId:
         type: string
       gender:
         type: string

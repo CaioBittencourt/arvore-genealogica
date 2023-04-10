@@ -260,12 +260,6 @@
                     "items": {
                         "$ref": "#/definitions/server.PersonRelativesResponse"
                     }
-                },
-                "spouses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/server.PersonRelativesResponse"
-                    }
                 }
             }
         },
@@ -334,7 +328,7 @@
                         "type": "string"
                     }
                 },
-                "fatherID": {
+                "fatherId": {
                     "type": "string"
                 },
                 "gender": {

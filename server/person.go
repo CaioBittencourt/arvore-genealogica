@@ -33,7 +33,6 @@ type PersonResponse struct {
 	Gender   string                    `json:"gender"`
 	Parents  []PersonRelativesResponse `json:"parents"`
 	Children []PersonRelativesResponse `json:"children"`
-	Spouses  []PersonRelativesResponse `json:"spouses"`
 }
 
 type RelationshipPerson struct {
@@ -209,7 +208,6 @@ func buildPersonResponseFromDomainPerson(domainPerson domain.Person) PersonRespo
 		Gender:   string(domainPerson.Gender),
 		Children: []PersonRelativesResponse{},
 		Parents:  []PersonRelativesResponse{},
-		Spouses:  []PersonRelativesResponse{},
 	}
 
 	for _, children := range domainPerson.Children {
@@ -228,15 +226,6 @@ func buildPersonResponseFromDomainPerson(domainPerson domain.Person) PersonRespo
 
 		domainParent := buildPersonRelativesResponseFromDomainPerson(*parent)
 		personResponse.Parents = append(personResponse.Parents, domainParent)
-	}
-
-	for _, spouse := range domainPerson.Spouses {
-		if spouse.Name == "" {
-			continue
-		}
-
-		domainSpouse := buildPersonRelativesResponseFromDomainPerson(*spouse)
-		personResponse.Spouses = append(personResponse.Spouses, domainSpouse)
 	}
 
 	return personResponse

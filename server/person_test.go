@@ -46,10 +46,6 @@ func addPersonIDToExpectedResponse(expected *server.PersonResponse, personInsert
 	for i, expectedChildren := range expected.Children {
 		expected.Children[i].ID = personInsertedIdByName[expectedChildren.Name]
 	}
-
-	for i, expectedSpouse := range expected.Spouses {
-		expected.Spouses[i].ID = personInsertedIdByName[expectedSpouse.Name]
-	}
 }
 
 func doStorePersonRequest(router *gin.Engine, req server.StorePersonRequest) (*server.PersonResponse, *server.ErrorResponse, int, error) {
@@ -229,7 +225,6 @@ func TestStore(t *testing.T) {
 				Gender:   alfredo.Gender,
 				Children: []server.PersonRelativesResponse{},
 				Parents:  []server.PersonRelativesResponse{},
-				Spouses:  []server.PersonRelativesResponse{},
 			},
 		},
 		{
@@ -242,11 +237,10 @@ func TestStore(t *testing.T) {
 				Gender:   dayse.Gender,
 				Parents:  []server.PersonRelativesResponse{{Name: alfredo.Name, Gender: alfredo.Gender}},
 				Children: []server.PersonRelativesResponse{},
-				Spouses:  []server.PersonRelativesResponse{},
 			},
 		},
 		{
-			testName:           "should store person with children and identify spouse relationship through children",
+			testName:           "should store person with children",
 			personToStore:      helena,
 			childrenNames:      []string{dayse.Name},
 			expectedStatusCode: 200,
@@ -255,7 +249,6 @@ func TestStore(t *testing.T) {
 				Gender:   helena.Gender,
 				Parents:  []server.PersonRelativesResponse{},
 				Children: []server.PersonRelativesResponse{{Name: dayse.Name, Gender: dayse.Gender}},
-				Spouses:  []server.PersonRelativesResponse{{Name: alfredo.Name, Gender: alfredo.Gender}},
 			},
 		},
 		{
@@ -269,7 +262,6 @@ func TestStore(t *testing.T) {
 				Gender:   denise.Gender,
 				Parents:  []server.PersonRelativesResponse{{Name: helena.Name, Gender: helena.Gender}, {Name: alfredo.Name, Gender: alfredo.Gender}},
 				Children: []server.PersonRelativesResponse{},
-				Spouses:  []server.PersonRelativesResponse{},
 			},
 		},
 		{
@@ -321,7 +313,6 @@ func TestStore(t *testing.T) {
 
 					assert.ElementsMatch(t, tt.expectedResponse.Parents, successRes.Parents)
 					assert.ElementsMatch(t, tt.expectedResponse.Children, successRes.Children)
-					assert.ElementsMatch(t, tt.expectedResponse.Spouses, successRes.Spouses)
 				}
 			}
 		}(tt))
@@ -629,6 +620,14 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 						},
 						Relationships: []server.Relationship{},
 					},
+					insertedPersonByName["Caio Regis"].ID: {
+						RelationshipPerson: server.RelationshipPerson{
+							ID:     insertedPersonByName["Caio Regis"].ID,
+							Name:   insertedPersonByName["Caio Regis"].Name,
+							Gender: insertedPersonByName["Caio Regis"].Gender,
+						},
+						Relationships: []server.Relationship{},
+					},
 					insertedPersonByName["Caio"].ID: {
 						RelationshipPerson: server.RelationshipPerson{
 							ID:     insertedPersonByName["Caio"].ID,
@@ -654,23 +653,6 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 							},
 						},
 					},
-					insertedPersonByName["Caio Regis"].ID: {
-						RelationshipPerson: server.RelationshipPerson{
-							ID:     insertedPersonByName["Caio Regis"].ID,
-							Name:   insertedPersonByName["Caio Regis"].Name,
-							Gender: insertedPersonByName["Caio Regis"].Gender,
-						},
-						Relationships: []server.Relationship{
-							{
-								Person: server.RelationshipPerson{
-									ID:     insertedPersonByName["Cauã"].ID,
-									Name:   insertedPersonByName["Cauã"].Name,
-									Gender: insertedPersonByName["Cauã"].Gender,
-								},
-								Relationship: string(domain.ChildRelashionship),
-							},
-						},
-					},
 					insertedPersonByName["Cauã"].ID: {
 						RelationshipPerson: server.RelationshipPerson{
 							ID:     insertedPersonByName["Cauã"].ID,
@@ -685,6 +667,14 @@ func TestGetPersonFamilyGraphHandler(t *testing.T) {
 									Gender: insertedPersonByName["Caio"].Gender,
 								},
 								Relationship: string(domain.AuntUncleRelashionship),
+							},
+							{
+								Person: server.RelationshipPerson{
+									ID:     insertedPersonByName["Caio Regis"].ID,
+									Name:   insertedPersonByName["Caio Regis"].Name,
+									Gender: insertedPersonByName["Caio Regis"].Gender,
+								},
+								Relationship: string(domain.ParentRelashionship),
 							},
 						},
 					},

@@ -13,7 +13,7 @@ This is an application that builds a family tree to extract relationships amongs
 
 
 This application uses MongoDB replica set to leverage atomic transactions and uses `$graphLookup` to recursively search hierarchical data.
-This application has three relationships on a database level. Each person can connect to each other through: `Children`, `Parent` and `Spouse`. The reason i added the `Spouse` relationship its because this relationship should affect the bacon number. To affect the bacons number you have to change how the family graph is connected. Today, you cant pass Spouse as a relationship to the API, this relationship is inferred when you insert `Person`!
+This application has two relationships on a database level. Each person can connect to each other through: `Children`, `Parent`. That being said i added the `Spouse` relationship to the domain layer because this relationship should affect the bacon number. To affect the bacons number you have to change how the family graph is connected. It wasnt very clear wether i should return spouses of the searched person, so the API currently returns the spouses for the search person!
 
 
 The relationships that are identifiable in this application are:
@@ -25,7 +25,7 @@ The relationships that are identifiable in this application are:
 - spouse
 - aunt/uncle
 
-That being said, what is returned by the API is ALL ascendants of a user plus siblings, nephew, uncles/aunts, spouses and children.
+That being said, what is returned by the API is ALL ascendants of a user plus siblings, nephew, uncles/aunts, spouses (of the searched person) and children.
 
 ## Endpoints
 
